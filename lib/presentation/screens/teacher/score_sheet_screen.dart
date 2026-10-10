@@ -875,14 +875,19 @@ class _ScoreSheetScreenState extends State<ScoreSheetScreen> {
                 final grade = _getGrade(total);
                 final gradeColor = _getGradeColor(grade);
 
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: AppColors.shadowCard,
-                  ),
-                  child: Column(
+                    onTap: () => _editStudentScore(index),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: AppColors.shadowCard,
+                      ),
+                      child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
@@ -944,8 +949,10 @@ class _ScoreSheetScreenState extends State<ScoreSheetScreen> {
                       ),
                     ],
                   ),
-                );
-              },
+                ),
+              ),
+            );
+          },
             ),
           ),
 
