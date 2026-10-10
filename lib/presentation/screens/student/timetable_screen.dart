@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:edstream_mobile/core/network/api_client.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
@@ -12,10 +13,11 @@ class TimetableScreen extends StatefulWidget {
 
 class _TimetableScreenState extends State<TimetableScreen> {
   int _selectedDay = 0; // 0 = Mon, 1 = Tue, etc.
+  bool _isLoading = false;
 
   final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
-  final Map<int, List<Map<String, String>>> _schedules = {
+  Map<int, List<Map<String, String>>> _schedules = {
     0: [
       {
         'time': '08:00 AM - 08:45 AM',
@@ -119,6 +121,52 @@ class _TimetableScreenState extends State<TimetableScreen> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    _fetchTimetable();
+  }
+
+  Future<void> _fetchTimetable() async {
+    setState(() => _isLoading = true);
+    const cacheKey = 'student_timetable_cache';
+    try {
+      final res = await ApiClient.instance.get(
+        'student/my-timetable',
+        cacheLocally: true,
+        cacheKey: cacheKey,
+      );
+
+      if (res is Map && res['data'] is Map) {
+        final data = res['data'] as Map;
+        final daysList = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        final Map<int, List<Map<String, String>>> parsed = {};
+
+        for (int i = 0; i < daysList.length; i++) {
+          final dayKey = daysList[i];
+          final periods = data[dayKey] as List? ?? [];
+          if (periods.isNotEmpty) {
+            parsed[i] = periods.map<Map<String, String>>((p) {
+              return {
+                'time': p['time']?.toString() ?? '08:00 AM - 08:45 AM',
+                'subject': p['subject']?.toString() ?? 'Subject',
+                'teacher': p['teacher']?.toString() ?? 'Teacher',
+                'room': p['room']?.toString() ?? 'Classroom',
+              };
+            }).toList();
+          }
+        }
+
+        if (parsed.isNotEmpty) {
+          setState(() {
+            _schedules = parsed;
+          });
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final periods = _schedules[_selectedDay] ?? [];
 
@@ -166,70 +214,75 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
           // Periods List
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(20),
-              itemCount: periods.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 14),
-              itemBuilder: (context, index) {
-                final period = periods[index];
-                final isBreak = period['subject']!.contains('Break');
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : RefreshIndicator(
+                    onRefresh: _fetchTimetable,
+                    child: ListView.separated(
+                padding: const EdgeInsets.all(20),
+                itemCount: periods.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 14),
+                itemBuilder: (context, index) {
+                  final period = periods[index];
+                  final isBreak = (period['subject'] ?? '').contains('Break');
 
-                return Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: isBreak ? const Color(0xFFFEF3C7) : AppColors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: isBreak ? null : AppColors.shadowCard,
-                    border: isBreak
-                        ? Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3))
-                        : null,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: (isBreak ? const Color(0xFFF59E0B) : AppColors.primary)
-                              .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
+                  return Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: isBreak ? const Color(0xFFFEF3C7) : AppColors.surface,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: isBreak ? null : AppColors.shadowCard,
+                      border: isBreak
+                          ? Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3))
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: (isBreak ? const Color(0xFFF59E0B) : AppColors.primary)
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            isBreak ? Icons.restaurant_rounded : Icons.schedule_rounded,
+                            color: isBreak ? const Color(0xFFD97706) : AppColors.primary,
+                            size: 22,
+                          ),
                         ),
-                        child: Icon(
-                          isBreak ? Icons.restaurant_rounded : Icons.schedule_rounded,
-                          color: isBreak ? const Color(0xFFD97706) : AppColors.primary,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              period['subject']!,
-                              style: AppTypography.titleMedium.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: isBreak ? const Color(0xFF92400E) : AppColors.light,
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                period['subject'] ?? 'Subject',
+                                style: AppTypography.titleMedium.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: isBreak ? const Color(0xFF92400E) : AppColors.light,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${period['teacher']} • ${period['room']}',
-                              style: AppTypography.bodySmall,
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                '${period['teacher']} • ${period['room']}',
+                                style: AppTypography.bodySmall,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        period['time']!.split(' - ')[0],
-                        style: AppTypography.labelSmall.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
+                        Text(
+                          (period['time'] ?? '').split(' - ')[0],
+                          style: AppTypography.labelSmall.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ],

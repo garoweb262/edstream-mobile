@@ -23,11 +23,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   String _studentName = 'Alex Johnson';
   String _regNumber = 'EDS/2026/0491';
   String _className = 'SS 2 Gold';
+  bool _hasDoubleEnrollment = false;
+  int _enrollmentCount = 1;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _fetchLiveStudentProfile();
   }
 
   void _loadProfile() {
@@ -39,6 +42,34 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         _className = cached['className'] ?? cached['class'] ?? 'SS 2 Gold';
       });
     }
+  }
+
+  Future<void> _fetchLiveStudentProfile() async {
+    try {
+      final res = await ApiClient.instance.get('student/get-student', cacheLocally: true);
+      if (res is Map && res['data'] is Map) {
+        final d = res['data'] as Map;
+        final fName = d['firstName'] ?? '';
+        final lName = d['lastName'] ?? '';
+        final fullName = '$fName $lName'.trim();
+        final reg = d['registrationNumber']?.toString() ?? _regNumber;
+        final cls = d['class'] is Map
+            ? '${d['class']['code'] ?? ''} ${d['class']['subclass'] ?? ''}'.trim()
+            : _className;
+
+        final enrollments = d['enrollments'] as List? ?? [];
+
+        if (mounted) {
+          setState(() {
+            if (fullName.isNotEmpty) _studentName = fullName;
+            _regNumber = reg;
+            if (cls.isNotEmpty) _className = cls;
+            _enrollmentCount = enrollments.length;
+            _hasDoubleEnrollment = enrollments.length > 1;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   void _handleLogout() async {
@@ -191,6 +222,32 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               ],
             ),
           ),
+          if (_hasDoubleEnrollment) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFF59E0B)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Double Enrollment Notice: You are actively registered across $_enrollmentCount sections.',
+                      style: AppTypography.labelMedium.copyWith(
+                        color: const Color(0xFF92400E),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
 
           // Performance Quick Metrics

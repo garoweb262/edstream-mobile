@@ -22,11 +22,15 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   int _currentIndex = 0;
   String _teacherName = 'Instructor';
   String _teacherEmail = '';
+  int _totalClasses = 3;
+  int _totalSubjects = 4;
+  int _totalStudents = 42;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _fetchDashboardMetrics();
   }
 
   void _loadProfile() {
@@ -37,6 +41,35 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
         _teacherEmail = cached['email'] ?? '';
       });
     }
+  }
+
+  Future<void> _fetchDashboardMetrics() async {
+    try {
+      final res = await ApiClient.instance.get(
+        'staff/dashboard',
+        cacheLocally: true,
+        cacheKey: 'staff_dashboard_cache',
+      );
+      if (res is Map && res['teacherData'] is Map) {
+        final td = res['teacherData'] as Map;
+        final teacher = td['teacher'] as Map?;
+        if (teacher != null) {
+          final fName = teacher['firstName'] ?? '';
+          final sName = teacher['surname'] ?? '';
+          final name = '$fName $sName'.trim();
+          if (name.isNotEmpty) _teacherName = name;
+          if (teacher['email'] != null) _teacherEmail = teacher['email'].toString();
+        }
+        final metrics = td['dashboardMetrics'] as Map?;
+        if (metrics != null && mounted) {
+          setState(() {
+            _totalClasses = (metrics['totalAssignedClasses'] as num?)?.toInt() ?? _totalClasses;
+            _totalSubjects = (metrics['totalSubjectsAssigned'] as num?)?.toInt() ?? _totalSubjects;
+            _totalStudents = (metrics['totalStudents'] as num?)?.toInt() ?? _totalStudents;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   void _handleLogout() async {
@@ -181,7 +214,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               Expanded(
                 child: _buildMetricTile(
                   title: 'Classes',
-                  count: '3',
+                  count: '$_totalClasses',
                   subtitle: 'Assigned',
                   icon: Icons.groups_rounded,
                   color: AppColors.primary,
@@ -191,7 +224,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               Expanded(
                 child: _buildMetricTile(
                   title: 'Subjects',
-                  count: '4',
+                  count: '$_totalSubjects',
                   subtitle: 'Taught',
                   icon: Icons.menu_book_rounded,
                   color: AppColors.secondary,
@@ -200,10 +233,10 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildMetricTile(
-                  title: 'Score Sheets',
-                  count: '2',
-                  subtitle: 'Pending',
-                  icon: Icons.assignment_late_rounded,
+                  title: 'Students',
+                  count: '$_totalStudents',
+                  subtitle: 'Total Enrolled',
+                  icon: Icons.school_rounded,
                   color: const Color(0xFFF59E0B),
                 ),
               ),

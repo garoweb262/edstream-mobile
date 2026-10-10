@@ -62,6 +62,7 @@ class _ScoreSheetScreenState extends State<ScoreSheetScreen> {
       _noOfCa = widget.initialNoOfCa!;
     }
     _loadScoreSheet();
+    _fetchLiveAssignmentScores();
     _fetchSchoolSettingsAndAcademicPeriod();
   }
 
@@ -123,6 +124,104 @@ class _ScoreSheetScreenState extends State<ScoreSheetScreen> {
       ];
       LocalCacheStore.instance.setJson(cacheKey, _students);
     }
+  }
+
+  Future<void> _fetchLiveAssignmentScores() async {
+    final cacheKey = 'scoresheet_${widget.subjectId}';
+    try {
+      final res = await ApiClient.instance.get(
+        'result/get-assignment',
+        queryParams: {'subjectClass': widget.subjectId},
+        cacheLocally: true,
+        cacheKey: '${cacheKey}_server',
+      );
+
+      if (res is Map && res['data'] is Map) {
+        final data = res['data'] as Map;
+        final rawStudents = data['students'] as List? ?? [];
+        final rawAssignments = data['assignments'] as List? ?? [];
+
+        final List<Map<String, dynamic>> loadedList = [];
+
+        // Build lookup map of existing scores
+        final Map<String, Map<String, dynamic>> scoresMap = {};
+        for (final item in rawAssignments) {
+          if (item is Map) {
+            final reg = item['registrationNumber']?.toString();
+            final stdId = item['studentId'] is Map
+                ? item['studentId']['_id']?.toString()
+                : item['studentId']?.toString();
+            if (reg != null) scoresMap[reg] = Map<String, dynamic>.from(item);
+            if (stdId != null) scoresMap[stdId] = Map<String, dynamic>.from(item);
+          }
+        }
+
+        if (rawStudents.isNotEmpty) {
+          for (final std in rawStudents) {
+            if (std is Map) {
+              final stdId = std['_id']?.toString() ?? '';
+              final reg = std['registrationNumber']?.toString() ?? '';
+              final fName = std['firstName'] ?? '';
+              final mName = std['middleName'] ?? '';
+              final lName = std['lastName'] ?? '';
+              final fullName = '$fName $mName $lName'.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+              final score = scoresMap[reg] ?? scoresMap[stdId] ?? {};
+              final ca1 = (score['firstCA'] as num?)?.toDouble() ?? 0.0;
+              final ca2 = (score['secondCA'] as num?)?.toDouble() ?? 0.0;
+              final ca3 = (score['thirdCA'] as num?)?.toDouble() ?? 0.0;
+              final exam = (score['exam'] as num?)?.toDouble() ?? 0.0;
+
+              loadedList.add({
+                'id': stdId.isNotEmpty ? stdId : reg,
+                'name': fullName.isNotEmpty ? fullName : 'Student',
+                'regNo': reg,
+                'ca1': ca1,
+                'ca2': ca2,
+                'ca3': ca3,
+                'exam': exam,
+              });
+            }
+          }
+        } else if (rawAssignments.isNotEmpty) {
+          for (final item in rawAssignments) {
+            if (item is Map) {
+              final stdObj = item['studentId'] as Map? ?? {};
+              final stdId = stdObj['_id']?.toString() ?? item['_id']?.toString() ?? '';
+              final reg = item['registrationNumber']?.toString() ??
+                  stdObj['registrationNumber']?.toString() ??
+                  '';
+              final fName = stdObj['firstName'] ?? '';
+              final mName = stdObj['middleName'] ?? '';
+              final lName = stdObj['lastName'] ?? '';
+              final fullName = '$fName $mName $lName'.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+              final ca1 = (item['firstCA'] as num?)?.toDouble() ?? 0.0;
+              final ca2 = (item['secondCA'] as num?)?.toDouble() ?? 0.0;
+              final ca3 = (item['thirdCA'] as num?)?.toDouble() ?? 0.0;
+              final exam = (item['exam'] as num?)?.toDouble() ?? 0.0;
+
+              loadedList.add({
+                'id': stdId.isNotEmpty ? stdId : reg,
+                'name': fullName.isNotEmpty ? fullName : 'Student',
+                'regNo': reg,
+                'ca1': ca1,
+                'ca2': ca2,
+                'ca3': ca3,
+                'exam': exam,
+              });
+            }
+          }
+        }
+
+        if (loadedList.isNotEmpty && mounted) {
+          setState(() {
+            _students = loadedList;
+          });
+          LocalCacheStore.instance.setJson(cacheKey, loadedList);
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchSchoolSettingsAndAcademicPeriod() async {

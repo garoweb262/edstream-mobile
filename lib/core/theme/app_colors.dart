@@ -18,6 +18,11 @@ abstract class AppColors {
   static const Color warning = Color(0xFFFACC15); // Yellow/Amber
   static const Color info = Color(0xFF3B82F6); // Blue
 
+  // Semantic Aliases
+  static const Color textPrimary = dark;
+  static const Color textSecondary = color2Light;
+  static const Color cardBorder = color4Light;
+
   // Custom Neutral & Accent Tints
   static const Color color1Light = Color(0xFFC1BBEB); // Soft Lavender Accent / Tag
   static const Color color2Light = Color(0xFFA098AE); // Muted Grey / Subtitles
