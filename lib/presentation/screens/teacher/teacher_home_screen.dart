@@ -75,8 +75,14 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             _totalClasses = (metrics['totalAssignedClasses'] as num?)?.toInt() ?? _totalClasses;
             _totalSubjects = (metrics['totalSubjectsAssigned'] as num?)?.toInt() ?? _totalSubjects;
             _totalStudents = (metrics['totalStudents'] as num?)?.toInt() ?? _totalStudents;
-            _maleCount = (_totalStudents * 0.57).round();
-            _femaleCount = _totalStudents - _maleCount;
+            final genderData = metrics['studentGenderData'] as Map?;
+            if (genderData != null) {
+              _maleCount = (genderData['male'] as num?)?.toInt() ?? _maleCount;
+              _femaleCount = (genderData['female'] as num?)?.toInt() ?? _femaleCount;
+            } else {
+              _maleCount = (_totalStudents * 0.57).round();
+              _femaleCount = _totalStudents - _maleCount;
+            }
           });
         }
       }

@@ -46,25 +46,41 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
 
     try {
       final res = await ApiClient.instance.get(
-        'staff/all',
+        'staff',
         cacheLocally: true,
         cacheKey: cacheKey,
       );
 
-      if (res is List && res.isNotEmpty) {
+      final rawList = res is List
+          ? res
+          : (res is Map ? (res['staffMembers'] ?? res['data'] ?? res['staff']) : null);
+
+      if (rawList is List && rawList.isNotEmpty) {
+        final mapped = rawList.map<Map<String, dynamic>>((s) {
+          if (s is Map) {
+            return {
+              'staffId': s['staffId']?.toString() ?? 'STF-000',
+              'firstName': s['firstName']?.toString() ?? '',
+              'surname': s['surname']?.toString() ?? '',
+              'otherName': s['otherName']?.toString() ?? '',
+              'email': s['email']?.toString() ?? '',
+              'phoneNumber': s['phoneNumber']?.toString() ?? '',
+              'gender': s['gender']?.toString() ?? 'Other',
+              'staffType': s['staffType']?.toString() ?? 'Staff',
+              'status': s['status']?.toString() ?? 'active',
+              'department': s['department']?.toString() ?? 'Academic',
+            };
+          }
+          return {};
+        }).where((s) => s.isNotEmpty).toList();
+
         if (mounted) {
           setState(() {
-            _staffList = List<Map<String, dynamic>>.from(res);
+            _staffList = mapped;
             _isLoading = false;
           });
         }
-      } else if (res is Map && res['data'] is List && (res['data'] as List).isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _staffList = List<Map<String, dynamic>>.from(res['data'] as List);
-            _isLoading = false;
-          });
-        }
+        LocalCacheStore.instance.setJson(cacheKey, mapped);
       } else if (_staffList.isEmpty) {
         _loadDefaultMockStaff();
       }

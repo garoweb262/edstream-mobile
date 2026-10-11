@@ -72,12 +72,21 @@ class _ManagementHubScreenState extends State<ManagementHubScreen> {
         _totalStaff = (summary['totalStaffs'] as num?)?.toInt() ?? _totalStaff;
         _activeStaff = (summary['activeStaffs'] as num?)?.toInt() ?? _activeStaff;
       });
-    }
-    if (data['totalFeesGenerated'] != null) {
-      _totalFees = '₦${_formatCurrency((data['totalFeesGenerated'] as num).toDouble())}';
-    }
-    if (data['totalExpenses'] != null) {
-      _totalExpenses = '₦${_formatCurrency((data['totalExpenses'] as num).toDouble())}';
+      final feesVal = summary['totalFeesGenerated'] ?? data['totalFeesGenerated'];
+      if (feesVal != null) {
+        _totalFees = '₦${_formatCurrency((feesVal as num).toDouble())}';
+      }
+      final expVal = summary['totalExpenses'] ?? data['totalExpenses'];
+      if (expVal != null) {
+        _totalExpenses = '₦${_formatCurrency((expVal as num).toDouble())}';
+      }
+    } else {
+      if (data['totalFeesGenerated'] != null) {
+        _totalFees = '₦${_formatCurrency((data['totalFeesGenerated'] as num).toDouble())}';
+      }
+      if (data['totalExpenses'] != null) {
+        _totalExpenses = '₦${_formatCurrency((data['totalExpenses'] as num).toDouble())}';
+      }
     }
   }
 

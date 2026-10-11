@@ -108,8 +108,22 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen>
       );
 
       if (res is Map && res['data'] is List) {
+        final List<Map<String, dynamic>> flattened = [];
+        for (var sectionItem in res['data']) {
+          if (sectionItem is Map && sectionItem['classes'] is List) {
+            for (var classItem in sectionItem['classes']) {
+              if (classItem is Map && classItem['results'] is List) {
+                for (var r in classItem['results']) {
+                  if (r is Map) flattened.add(Map<String, dynamic>.from(r));
+                }
+              }
+            }
+          } else if (sectionItem is Map) {
+            flattened.add(Map<String, dynamic>.from(sectionItem));
+          }
+        }
         setState(() {
-          _results = List<Map<String, dynamic>>.from(res['data']);
+          _results = flattened;
           _isLoadingResults = false;
         });
         LocalCacheStore.instance.setJson(cacheKey, _results);

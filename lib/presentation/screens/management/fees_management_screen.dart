@@ -49,20 +49,64 @@ class _FeesManagementScreenState extends State<FeesManagementScreen> with Single
 
     try {
       final sRes = await ApiClient.instance.get('schoolfees', cacheLocally: true, cacheKey: schedulesKey);
-      final tRes = await ApiClient.instance.get('payments', cacheLocally: true, cacheKey: txKey);
+      final tRes = await ApiClient.instance.get('payment/get-all-school-fees-transaction', cacheLocally: true, cacheKey: txKey);
 
-      if (sRes is List && sRes.isNotEmpty) {
-        setState(() => _feeSchedules = List<Map<String, dynamic>>.from(sRes));
-      } else if (sRes is Map && sRes['data'] is List) {
-        setState(() => _feeSchedules = List<Map<String, dynamic>>.from(sRes['data'] as List));
+      final rawSchedules = sRes is List
+          ? sRes
+          : (sRes is Map ? (sRes['schoolFeess'] ?? sRes['data']) : null);
+      if (rawSchedules is List && rawSchedules.isNotEmpty) {
+        final mappedSchedules = rawSchedules.map<Map<String, dynamic>>((item) {
+          if (item is Map) {
+            final sessionStr = item['session'] is Map ? item['session']['session'] : item['session']?.toString();
+            final termStr = item['term'] is Map ? item['term']['term'] : item['term']?.toString();
+            final sectionStr = item['section'] is Map ? item['section']['name'] : item['section']?.toString();
+            return {
+              'session': sessionStr ?? '2024/2025',
+              'term': termStr ?? '3rd Term',
+              'section': sectionStr ?? 'All Sections',
+              'amount': (item['amount'] as num?)?.toDouble() ?? 75000,
+              'lateFees': (item['lateFees'] as num?)?.toDouble() ?? 5000,
+              'openDate': item['openDate']?.toString() ?? '2026-04-15',
+              'closeDate': item['closeDate']?.toString() ?? '2026-06-30',
+              'status': item['status']?.toString() ?? 'active',
+            };
+          }
+          return {};
+        }).where((s) => s.isNotEmpty).toList();
+
+        setState(() => _feeSchedules = mappedSchedules);
+        LocalCacheStore.instance.setJson(schedulesKey, mappedSchedules);
       } else if (_feeSchedules.isEmpty) {
         _loadDefaultMockSchedules();
       }
 
-      if (tRes is List && tRes.isNotEmpty) {
-        setState(() => _transactions = List<Map<String, dynamic>>.from(tRes));
-      } else if (tRes is Map && tRes['data'] is List) {
-        setState(() => _transactions = List<Map<String, dynamic>>.from(tRes['data'] as List));
+      final rawTx = tRes is List
+          ? tRes
+          : (tRes is Map ? (tRes['data'] ?? tRes['transactions']) : null);
+      if (rawTx is List && rawTx.isNotEmpty) {
+        final mappedTx = rawTx.map<Map<String, dynamic>>((item) {
+          if (item is Map) {
+            final std = item['studentId'];
+            final stdName = std is Map
+                ? '${std['firstName'] ?? ''} ${std['lastName'] ?? ''}'.trim()
+                : (item['studentName']?.toString() ?? 'Student');
+            final reg = std is Map
+                ? (std['registrationNumber'] ?? std['class']?.toString() ?? '')
+                : (item['regNo']?.toString() ?? '');
+            return {
+              'reference': item['reference']?.toString() ?? 'EDS-PAY-REF',
+              'studentName': stdName.isNotEmpty ? stdName : 'Student',
+              'regNo': reg.isNotEmpty ? reg : 'EDS/2026/SEC',
+              'amount': (item['amount'] as num?)?.toDouble() ?? 85000,
+              'status': item['status']?.toString() ?? 'successful',
+              'date': item['createdAt']?.toString() ?? '2026-10-09',
+            };
+          }
+          return {};
+        }).where((t) => t.isNotEmpty).toList();
+
+        setState(() => _transactions = mappedTx);
+        LocalCacheStore.instance.setJson(txKey, mappedTx);
       } else if (_transactions.isEmpty) {
         _loadDefaultMockTransactions();
       }

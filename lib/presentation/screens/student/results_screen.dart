@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:edstream_mobile/core/constants/app_constants.dart';
 import 'package:edstream_mobile/core/network/api_client.dart';
 import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
@@ -22,6 +23,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
   double _totalMarks = 504.0;
   String _session = '2024/2025';
   String _termName = '3rd Term';
+  String _studentName = 'Alex Johnson Chukwuma';
+  String _regNumber = 'EDS/2026/0491';
+  String _className = 'SS 2 Gold';
+  int _totalStudents = 38;
 
   List<Map<String, dynamic>> _subjects = [
     {
@@ -77,6 +82,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
   @override
   void initState() {
     super.initState();
+    final user = LocalCacheStore.instance.getJson(AppConstants.userProfileKey);
+    if (user is Map) {
+      final fName = user['firstName'] ?? '';
+      final lName = user['lastName'] ?? '';
+      final name = '$fName $lName'.trim();
+      if (name.isNotEmpty) _studentName = name;
+      if (user['registrationNumber'] != null) _regNumber = user['registrationNumber'].toString();
+      if (user['class'] is Map) {
+        _className = '${user['class']['code'] ?? ''} ${user['class']['subclass'] ?? ''}'.trim();
+      }
+    }
     _fetchResults();
   }
 
@@ -108,6 +124,27 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   void _applyResultData(Map data) {
+    final studentInfo = data['studentInfo'] as Map?;
+    if (studentInfo != null) {
+      if (studentInfo['name'] != null && studentInfo['name'].toString().isNotEmpty) {
+        _studentName = studentInfo['name'].toString();
+      }
+      if (studentInfo['registrationNumber'] != null && studentInfo['registrationNumber'].toString().isNotEmpty) {
+        _regNumber = studentInfo['registrationNumber'].toString();
+      }
+    }
+
+    final classInfo = data['classInfo'] as Map?;
+    if (classInfo != null) {
+      final code = classInfo['code'] ?? '';
+      final sub = classInfo['subclass'] ?? '';
+      final cName = '$code $sub'.trim();
+      if (cName.isNotEmpty) _className = cName;
+      if (classInfo['totalStudents'] != null) {
+        _totalStudents = (classInfo['totalStudents'] as num).toInt();
+      }
+    }
+
     final academic = data['academicInfo'] as Map?;
     if (academic != null) {
       _average = (academic['average'] as num?)?.toDouble() ?? _average;
@@ -276,14 +313,14 @@ class _ResultsScreenState extends State<ResultsScreen> {
                                       context,
                                       MaterialPageRoute(
                                         builder: (_) => ReportCardViewScreen(
-                                          studentName: 'Alex Johnson Chukwuma',
-                                          regNumber: 'EDS/2026/0491',
-                                          className: 'SS 2 Gold',
+                                          studentName: _studentName,
+                                          regNumber: _regNumber,
+                                          className: _className,
                                           session: _session,
                                           term: _termName,
                                           average: _average,
                                           position: _position,
-                                          totalStudents: 38,
+                                          totalStudents: _totalStudents,
                                           subjects: _subjects,
                                         ),
                                       ),

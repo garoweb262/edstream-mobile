@@ -40,7 +40,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen>
   Future<void> _fetchNotifications() async {
     final role = LocalCacheStore.instance.getString(AppConstants.roleKey);
     final isStudentRole = widget.isStudent || role == AppConstants.roleStudent;
-    final endpoint = isStudentRole ? 'student/notifications' : 'notification';
+    final endpoint = isStudentRole ? 'student/my-notifications' : 'notification';
     const cacheKey = 'notifications_stream_cache';
 
     final cached = LocalCacheStore.instance.getJson(cacheKey);
@@ -55,7 +55,13 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen>
       if (res is List) {
         list = res;
       } else if (res is Map) {
-        list = res['data'] ?? res['notifications'] ?? [];
+        if (res['data'] is List) {
+          list = res['data'];
+        } else if (res['data'] is Map && res['data']['notifications'] is List) {
+          list = res['data']['notifications'];
+        } else if (res['notifications'] is List) {
+          list = res['notifications'];
+        }
       }
 
       if (list.isNotEmpty && mounted) {
@@ -104,7 +110,25 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen>
   }
 
   void _applyData(List list) {
-    final parsed = List<Map<String, dynamic>>.from(list);
+    final parsed = list.map<Map<String, dynamic>>((item) {
+      if (item is Map) {
+        final title = item['header'] ?? item['title'] ?? 'Notification';
+        final message = item['message'] ?? '';
+        final sender = item['from'] is Map
+            ? '${item['from']['firstName'] ?? ''} ${item['from']['surname'] ?? ''}'.trim()
+            : (item['from']?.toString() ?? item['sender'] ?? 'Administration');
+        final audience = item['notificationType'] ?? item['audience'] ?? 'General';
+        return {
+          ...Map<String, dynamic>.from(item),
+          'title': title,
+          'message': message,
+          'sender': sender.isNotEmpty ? sender : 'Administration',
+          'audience': audience,
+        };
+      }
+      return {};
+    }).where((item) => item.isNotEmpty).toList();
+
     setState(() {
       _allNotifications = parsed;
       _mentions = parsed.where((n) => n['isMention'] == true).toList();
@@ -248,10 +272,11 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen>
 
                       setModalState(() => isSending = true);
                       final payload = {
+                        'header': titleController.text.trim(),
                         'title': titleController.text.trim(),
                         'message': messageController.text.trim(),
-                        'targetAudience': audience,
-                        'targetClass': targetClass,
+                        'notificationType': audience,
+                        'targetClass': targetClass != 'All Assigned Classes' ? targetClass : null,
                       };
 
                       try {

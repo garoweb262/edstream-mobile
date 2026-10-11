@@ -164,6 +164,35 @@ class ApiClient {
     }
   }
 
+  /// PATCH request
+  Future<dynamic> patch(
+    String path, {
+    dynamic body,
+    Map<String, String>? headers,
+  }) async {
+    await getAuthToken();
+    try {
+      final uri = _resolveUri(path);
+      final response = await http
+          .patch(
+            uri,
+            headers: _buildHeaders(headers),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeoutDuration);
+
+      return _handleResponse(response);
+    } on SocketException {
+      throw ApiException(
+        message: 'No internet connection.',
+        isNetworkError: true,
+      );
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(message: 'Request failed: $e');
+    }
+  }
+
   /// DELETE request
   Future<dynamic> delete(
     String path, {

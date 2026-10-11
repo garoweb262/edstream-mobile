@@ -51,12 +51,25 @@ class _SchoolFeesScreenState extends State<SchoolFeesScreen> {
         cacheKey: cacheKey,
       );
 
-      if (res is Map && res['payments'] is List) {
-        final list = List<Map<String, dynamic>>.from(res['payments']);
+      final rawPayments = res is List
+          ? res
+          : (res is Map ? (res['payments'] ?? (res['data'] is Map ? res['data']['payments'] : res['data'])) : null);
+
+      if (rawPayments is List) {
+        final list = List<Map<String, dynamic>>.from(rawPayments);
         setState(() {
           _paymentsHistory = list;
           if (list.isNotEmpty) {
             _isPaid = list.any((p) => p['status'] == 'successful');
+            final first = list.first;
+            if (first['amount'] != null) {
+              _totalAmount = '₦${first['amount']}';
+            }
+            final fee = first['schoolFeesId'];
+            if (fee is Map) {
+              if (fee['session'] is Map) _session = fee['session']['session']?.toString() ?? _session;
+              if (fee['term'] is Map) _term = fee['term']['term']?.toString() ?? _term;
+            }
           }
         });
       }
@@ -65,8 +78,9 @@ class _SchoolFeesScreenState extends State<SchoolFeesScreen> {
   }
 
   void _applyCachedFees(Map data) {
-    if (data['payments'] is List) {
-      _paymentsHistory = List<Map<String, dynamic>>.from(data['payments']);
+    final rawPayments = data['payments'] ?? (data['data'] is Map ? data['data']['payments'] : data['data']);
+    if (rawPayments is List) {
+      _paymentsHistory = List<Map<String, dynamic>>.from(rawPayments);
       if (_paymentsHistory.isNotEmpty) {
         _isPaid = _paymentsHistory.any((p) => p['status'] == 'successful');
         final first = _paymentsHistory.first;
@@ -83,69 +97,102 @@ class _SchoolFeesScreenState extends State<SchoolFeesScreen> {
   }
 
   void _showPaymentModal() {
+    bool isGeneratingPayment = false;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Paystack Gateway', style: AppTypography.titleLarge),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: () => Navigator.pop(ctx),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Paystack Gateway', style: AppTypography.titleLarge),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Secured payment processing powered by Paystack.',
+                    style: AppTypography.bodySmall,
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.color3Light,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Total Payable', style: AppTypography.titleSmall),
+                        Text(
+                          _totalAmount,
+                          style: AppTypography.titleLarge.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  PrimaryButton(
+                    text: 'Proceed to Paystack Checkout',
+                    isLoading: isGeneratingPayment,
+                    onPressed: () async {
+                      setModalState(() => isGeneratingPayment = true);
+                      try {
+                        final res = await ApiClient.instance.post('payment/generate-paystack-payment');
+                        if (modalCtx.mounted) Navigator.pop(modalCtx);
+                        if (mounted) {
+                          final ref = res is Map ? (res['reference'] ?? res['data']?['reference']) : null;
+                          if (ref != null) {
+                            // Verify payment in background
+                            () async {
+                              try {
+                                await ApiClient.instance.get(
+                                  'payment/student-verify-paystack-payment',
+                                  queryParams: {'reference': ref},
+                                );
+                                if (mounted) _fetchSchoolFees();
+                              } catch (_) {}
+                            }();
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Paystack transaction initialized. Checking status...'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (modalCtx.mounted) Navigator.pop(modalCtx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Payment initiation: $e')),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.credit_card_rounded, color: Colors.white, size: 20),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Secured payment processing powered by Paystack.',
-                style: AppTypography.bodySmall,
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.color3Light,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Total Payable', style: AppTypography.titleSmall),
-                    Text(
-                      _totalAmount,
-                      style: AppTypography.titleLarge.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              PrimaryButton(
-                text: 'Proceed to Paystack Checkout',
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Payment session launched. Checking receipt reference...'),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.credit_card_rounded, color: Colors.white, size: 20),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

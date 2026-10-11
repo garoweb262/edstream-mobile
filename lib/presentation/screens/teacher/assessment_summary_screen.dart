@@ -59,6 +59,13 @@ class _AssessmentSummaryScreenState extends State<AssessmentSummaryScreen> {
             _isLoading = false;
           });
         }
+      } else if (res is Map && res['data'] is Map) {
+        if (mounted) {
+          setState(() {
+            _summaries = [Map<String, dynamic>.from(res['data'] as Map)];
+            _isLoading = false;
+          });
+        }
       } else if (_summaries.isEmpty) {
         _loadDefaultMockData();
       }

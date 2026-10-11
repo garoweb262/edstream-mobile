@@ -56,7 +56,13 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
       if (res is List) {
         list = res;
       } else if (res is Map) {
-        list = res['data'] ?? res['complaints'] ?? [];
+        if (res['data'] is List) {
+          list = res['data'];
+        } else if (res['data'] is Map && res['data']['complaints'] is List) {
+          list = res['data']['complaints'];
+        } else if (res['complaints'] is List) {
+          list = res['complaints'];
+        }
       }
 
       if (list.isNotEmpty && mounted) {
@@ -216,17 +222,12 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
 
                       setModalState(() => isSubmitting = true);
                       final endpoint =
-                          isStudentRole ? 'student/create-complaint' : 'complain/create';
-                      final payload = isStudentRole
-                          ? {
-                              'subject': subjectController.text.trim(),
-                              'message': messageController.text.trim(),
-                            }
-                          : {
-                              'sendTo': sendTo,
-                              'subject': subjectController.text.trim(),
-                              'message': messageController.text.trim(),
-                            };
+                          isStudentRole ? 'complain/student-to-school' : 'complain/staff-to-school';
+                      final payload = {
+                        'subject': subjectController.text.trim(),
+                        'message': messageController.text.trim(),
+                        'complainType': isStudentRole ? 'student-to-school' : 'staff-to-school',
+                      };
 
                       try {
                         await ApiClient.instance.post(endpoint, body: payload);

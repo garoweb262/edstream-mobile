@@ -48,20 +48,33 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
         cacheKey: cacheKey,
       );
 
-      if (res is List && res.isNotEmpty) {
+      final rawList = res is List
+          ? res
+          : (res is Map ? (res['expenses'] ?? res['data']) : null);
+
+      if (rawList is List && rawList.isNotEmpty) {
+        final mapped = rawList.map<Map<String, dynamic>>((e) {
+          if (e is Map) {
+            final amt = (e['amountSpent'] as num?)?.toDouble() ??
+                (e['amount'] as num?)?.toDouble() ??
+                0.0;
+            return {
+              ...Map<String, dynamic>.from(e),
+              'amount': amt,
+              'reason': e['reason'] ?? '',
+              'status': e['status'] ?? 'pending',
+            };
+          }
+          return {};
+        }).where((e) => e.isNotEmpty).toList();
+
         if (mounted) {
           setState(() {
-            _expenses = List<Map<String, dynamic>>.from(res);
+            _expenses = mapped;
             _isLoading = false;
           });
         }
-      } else if (res is Map && res['data'] is List && (res['data'] as List).isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _expenses = List<Map<String, dynamic>>.from(res['data'] as List);
-            _isLoading = false;
-          });
-        }
+        LocalCacheStore.instance.setJson(cacheKey, mapped);
       } else if (_expenses.isEmpty) {
         _loadDefaultMockExpenses();
       }
@@ -246,9 +259,9 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
                     onPressed: () async {
                       setModalState(() => isSubmitting = true);
                       try {
-                        final endpoint = isApprove ? 'expenses/approve' : 'expenses/reject';
-                        await ApiClient.instance.post(endpoint, body: {
-                          'expenseId': item['_id'],
+                        final expenseId = item['_id']?.toString() ?? '';
+                        final endpoint = isApprove ? 'expenses/approve/$expenseId' : 'expenses/reject/$expenseId';
+                        await ApiClient.instance.patch(endpoint, body: {
                           'note': noteController.text.trim(),
                         });
                       } catch (_) {}
@@ -366,9 +379,9 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
 
                       setModalState(() => isSubmitting = true);
                       try {
-                        await ApiClient.instance.post('expenses/create', body: {
+                        await ApiClient.instance.post('expenses', body: {
                           'reason': reason,
-                          'amount': amt,
+                          'amountSpent': amt,
                           'session': '2024/2025',
                           'term': '3rd Term',
                         });

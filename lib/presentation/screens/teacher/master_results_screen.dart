@@ -47,20 +47,81 @@ class _MasterResultsScreenState extends State<MasterResultsScreen> {
         cacheKey: cacheKey,
       );
 
-      if (res is List && res.isNotEmpty) {
+      final List<Map<String, dynamic>> parsedList = [];
+      final rawData = res is Map ? res['data'] : res;
+
+      if (rawData is List) {
+        for (final sectionObj in rawData) {
+          if (sectionObj is Map && sectionObj.containsKey('classes')) {
+            // Grouped structure: section -> classes -> results
+            final classes = sectionObj['classes'] as List? ?? [];
+            for (final cls in classes) {
+              if (cls is Map && cls.containsKey('results')) {
+                final resultsList = cls['results'] as List? ?? [];
+                for (final r in resultsList) {
+                  if (r is Map) {
+                    final studentInfo = r['studentInfo'] as Map? ?? {};
+                    final classInfo = r['classInfo'] as Map? ?? {};
+                    final academicInfo = r['academicInfo'] as Map? ?? {};
+                    final sessionObj = r['session'];
+                    final termObj = r['term'];
+                    final sessionStr = sessionObj is Map
+                        ? (sessionObj['session'] ?? '')
+                        : (sessionObj?.toString() ?? '');
+                    final termStr = termObj is Map
+                        ? (termObj['term'] ?? termObj['name'] ?? '')
+                        : (termObj?.toString() ?? '');
+
+                    // Extract subjects list
+                    final rawSubjects = r['subjects'] as List? ?? [];
+                    final mappedSubjects = rawSubjects.map<Map<String, dynamic>>((s) {
+                      if (s is Map) {
+                        return {
+                          'subject': s['name'] ?? s['subjectName'] ?? s['subject'] ?? 'Subject',
+                          'ca1': (s['test1'] as num?)?.toDouble() ?? (s['ca1'] as num?)?.toDouble() ?? 0.0,
+                          'ca2': (s['test2'] as num?)?.toDouble() ?? (s['ca2'] as num?)?.toDouble() ?? 0.0,
+                          'ca3': (s['test3'] as num?)?.toDouble() ?? (s['ca3'] as num?)?.toDouble() ?? 0.0,
+                          'exam': (s['exam'] as num?)?.toDouble() ?? 0.0,
+                          'total': (s['total'] as num?)?.toDouble() ?? (s['totalScore'] as num?)?.toDouble() ?? 0.0,
+                          'grade': s['grade']?.toString() ?? 'A',
+                          'remark': s['remark']?.toString() ?? 'Good',
+                        };
+                      }
+                      return {};
+                    }).where((s) => s.isNotEmpty).toList();
+
+                    parsedList.add({
+                      'studentName': studentInfo['name'] ?? r['studentName'] ?? 'Student',
+                      'regNumber': studentInfo['registrationNumber'] ?? studentInfo['regNo'] ?? r['registrationNumber'] ?? '',
+                      'class': '${classInfo['code'] ?? cls['classCode'] ?? ''} ${classInfo['subclass'] ?? cls['subclass'] ?? ''}'.trim(),
+                      'session': sessionStr.isNotEmpty ? sessionStr : '2024/2025',
+                      'term': termStr.isNotEmpty ? termStr : '3rd Term',
+                      'average': (academicInfo['average'] as num?)?.toDouble() ?? (r['average'] as num?)?.toDouble() ?? 0.0,
+                      'position': academicInfo['position'] ?? r['position'] ?? 1,
+                      'totalStudents': classInfo['totalStudents'] ?? cls['totalStudents'] ?? 40,
+                      'grade': academicInfo['grade'] ??
+                          (((academicInfo['average'] as num?)?.toDouble() ?? 0) >= 70 ? 'A' : 'B'),
+                      'subjects': mappedSubjects,
+                      'raw': r,
+                    });
+                  }
+                }
+              }
+            }
+          } else if (sectionObj is Map) {
+            parsedList.add(Map<String, dynamic>.from(sectionObj));
+          }
+        }
+      }
+
+      if (parsedList.isNotEmpty) {
         if (mounted) {
           setState(() {
-            _results = List<Map<String, dynamic>>.from(res);
+            _results = parsedList;
             _isLoading = false;
           });
         }
-      } else if (res is Map && res['data'] is List && (res['data'] as List).isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _results = List<Map<String, dynamic>>.from(res['data'] as List);
-            _isLoading = false;
-          });
-        }
+        LocalCacheStore.instance.setJson(cacheKey, parsedList);
       } else if (_results.isEmpty) {
         _loadDefaultMockResults();
       }
@@ -458,6 +519,7 @@ class _MasterResultsScreenState extends State<MasterResultsScreen> {
                           average: avg,
                           position: pos,
                           totalStudents: totalStudents,
+                          subjects: item['subjects'] as List<Map<String, dynamic>>?,
                         ),
                       ),
                     );

@@ -84,15 +84,20 @@ class _StudentRosterScreenState extends State<StudentRosterScreen> {
         );
       }
 
-      if (response is Map && response['students'] is List) {
-        final parsed = List<Map<String, dynamic>>.from(response['students']);
-        setState(() {
-          _allStudents = parsed;
-          _filteredStudents = parsed;
-          _isLoading = false;
-        });
-        LocalCacheStore.instance.setJson(cacheKey, parsed);
-        return;
+      if (response is Map) {
+        final rawList = response['students'] is List
+            ? response['students'] as List
+            : (response['data'] is List ? response['data'] as List : null);
+        if (rawList != null) {
+          final parsed = List<Map<String, dynamic>>.from(rawList);
+          setState(() {
+            _allStudents = parsed;
+            _filteredStudents = parsed;
+            _isLoading = false;
+          });
+          LocalCacheStore.instance.setJson(cacheKey, parsed);
+          return;
+        }
       }
     } catch (_) {}
 
