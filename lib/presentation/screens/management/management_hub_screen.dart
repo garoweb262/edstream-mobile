@@ -7,12 +7,18 @@ import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
 import 'package:edstream_mobile/presentation/screens/common/complaints_screen.dart';
 import 'package:edstream_mobile/presentation/screens/common/notifications_center_screen.dart';
 import 'package:edstream_mobile/presentation/screens/common/profile_settings_screen.dart';
+import 'package:edstream_mobile/presentation/screens/management/academic_calendar_screen.dart';
+import 'package:edstream_mobile/presentation/screens/management/academic_structure_screen.dart';
+import 'package:edstream_mobile/presentation/screens/management/branches_management_screen.dart';
 import 'package:edstream_mobile/presentation/screens/management/expenses_approval_screen.dart';
 import 'package:edstream_mobile/presentation/screens/management/fees_management_screen.dart';
+import 'package:edstream_mobile/presentation/screens/management/school_settings_screen.dart';
 import 'package:edstream_mobile/presentation/screens/management/staff_directory_screen.dart';
+import 'package:edstream_mobile/presentation/screens/management/students_management_screen.dart';
+import 'package:edstream_mobile/presentation/screens/management/subscriptions_screen.dart';
 import 'package:edstream_mobile/presentation/screens/teacher/assessment_summary_screen.dart';
 import 'package:edstream_mobile/presentation/screens/teacher/master_results_screen.dart';
-import 'package:edstream_mobile/presentation/screens/teacher/student_roster_screen.dart';
+import 'package:edstream_mobile/presentation/screens/student/timetable_screen.dart';
 
 class ManagementHubScreen extends StatefulWidget {
   final String role; // 'director', 'principal', 'head-mistress', 'finance-officer', 'exam-officer'
@@ -251,13 +257,7 @@ class _ManagementHubScreenState extends State<ManagementHubScreen> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => StudentRosterScreen(
-                  classId: 'all',
-                  className: 'All Campus Students',
-                  studentsCount: _totalStudents,
-                ),
-              ),
+              MaterialPageRoute(builder: (_) => const StudentsManagementScreen()),
             );
           },
         ),
@@ -371,14 +371,86 @@ class _ManagementHubScreenState extends State<ManagementHubScreen> {
       childAspectRatio: 1.25,
       children: [
         _buildModuleTile(
-          icon: Icons.groups_2_rounded,
-          title: 'Staff Directory',
-          subtitle: 'Roles, Contacts & Status',
+          icon: Icons.people_alt_rounded,
+          title: 'Student Roster',
+          subtitle: 'Admissions & Directory',
           color: AppColors.primary,
           onTap: () {
             Navigator.push(
               context,
+              MaterialPageRoute(builder: (_) => const StudentsManagementScreen()),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.groups_2_rounded,
+          title: 'Staff Directory',
+          subtitle: 'Roles, Contacts & Faculty',
+          color: AppColors.secondary,
+          onTap: () {
+            Navigator.push(
+              context,
               MaterialPageRoute(builder: (_) => const StaffDirectoryScreen()),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.card_membership_rounded,
+          title: 'Subscriptions',
+          subtitle: 'Plan, Renew & Ledger',
+          color: const Color(0xFF6366F1),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SubscriptionsScreen()),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.credit_card_rounded,
+          title: 'School Fees Hub',
+          subtitle: 'Schedules & Paystack',
+          color: AppColors.success,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FeesManagementScreen()),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.domain_rounded,
+          title: 'Academic Structure',
+          subtitle: 'Classes, Sections & Subjects',
+          color: const Color(0xFF0284C7),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AcademicStructureScreen()),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.calendar_month_rounded,
+          title: 'Academic Calendar',
+          subtitle: 'Sessions & Active Terms',
+          color: const Color(0xFF8B5CF6),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AcademicCalendarScreen()),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.location_city_rounded,
+          title: 'Campus Branches',
+          subtitle: 'Multi-Campus Network',
+          color: const Color(0xFF0D9488),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BranchesManagementScreen()),
             );
           },
         ),
@@ -395,22 +467,10 @@ class _ManagementHubScreenState extends State<ManagementHubScreen> {
           },
         ),
         _buildModuleTile(
-          icon: Icons.credit_card_rounded,
-          title: 'School Fees Hub',
-          subtitle: 'Billing & Ledger',
-          color: AppColors.success,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const FeesManagementScreen()),
-            );
-          },
-        ),
-        _buildModuleTile(
           icon: Icons.analytics_rounded,
           title: 'Master Results',
           subtitle: 'Class Rankings & Report',
-          color: AppColors.secondary,
+          color: const Color(0xFF4338CA),
           onTap: () {
             Navigator.push(
               context,
@@ -439,6 +499,30 @@ class _ManagementHubScreenState extends State<ManagementHubScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const ComplaintsScreen(isStudent: false)),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.access_time_filled_rounded,
+          title: 'Class Timetable',
+          subtitle: 'Daily Periods & Schedules',
+          color: const Color(0xFF059669),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TimetableScreen()),
+            );
+          },
+        ),
+        _buildModuleTile(
+          icon: Icons.tune_rounded,
+          title: 'School Settings',
+          subtitle: 'Grading Policy & CA Rules',
+          color: const Color(0xFF64748B),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SchoolSettingsScreen()),
             );
           },
         ),

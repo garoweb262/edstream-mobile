@@ -5,6 +5,8 @@ import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
+import 'package:edstream_mobile/presentation/widgets/custom_text_field.dart';
+import 'package:edstream_mobile/presentation/widgets/primary_button.dart';
 
 class StaffDirectoryScreen extends StatefulWidget {
   const StaffDirectoryScreen({super.key});
@@ -202,6 +204,159 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
     }).toList();
   }
 
+  void _showAddStaffModal() {
+    final fNameController = TextEditingController();
+    final surnameController = TextEditingController();
+    final emailController = TextEditingController();
+    final phoneController = TextEditingController();
+
+    String staffType = 'teacher';
+    String gender = 'Male';
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (modalCtx, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(modalCtx).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Add Staff Member', style: AppTypography.titleLarge),
+                const SizedBox(height: 4),
+                Text('Enroll a new academic teacher or administrative faculty member.', style: AppTypography.bodySmall),
+                const SizedBox(height: 16),
+
+                CustomTextField(labelText: 'First Name', hintText: 'e.g. Ahmad', controller: fNameController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Surname', hintText: 'e.g. Garo', controller: surnameController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Work Email Address', hintText: 'e.g. staff@edstream.org', controller: emailController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Phone Number', hintText: 'e.g. 08012345678', controller: phoneController),
+                const SizedBox(height: 14),
+
+                Text('Institutional Role', style: AppTypography.labelMedium),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButton<String>(
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    value: staffType,
+                    items: const [
+                      DropdownMenuItem(value: 'teacher', child: Text('Teacher / Form Master')),
+                      DropdownMenuItem(value: 'principal', child: Text('Principal')),
+                      DropdownMenuItem(value: 'director', child: Text('School Director')),
+                      DropdownMenuItem(value: 'exam-officer', child: Text('Examination Officer')),
+                      DropdownMenuItem(value: 'finance-officer', child: Text('Finance / Bursar')),
+                      DropdownMenuItem(value: 'non-academic', child: Text('Administrative Support')),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => staffType = val);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                Text('Gender', style: AppTypography.labelMedium),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Male'),
+                      selected: gender == 'Male',
+                      onSelected: (val) => setModalState(() => gender = 'Male'),
+                    ),
+                    const SizedBox(width: 12),
+                    ChoiceChip(
+                      label: const Text('Female'),
+                      selected: gender == 'Female',
+                      onSelected: (val) => setModalState(() => gender = 'Female'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                PrimaryButton(
+                  text: 'Enroll Staff Member',
+                  isLoading: isSaving,
+                  onPressed: () async {
+                    if (fNameController.text.trim().isEmpty || surnameController.text.trim().isEmpty || emailController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please complete required name and email fields.')),
+                      );
+                      return;
+                    }
+
+                    setModalState(() => isSaving = true);
+                    final payload = {
+                      'firstName': fNameController.text.trim(),
+                      'surname': surnameController.text.trim(),
+                      'email': emailController.text.trim(),
+                      'phoneNumber': phoneController.text.trim(),
+                      'staffType': staffType,
+                      'gender': gender,
+                    };
+
+                    try {
+                      await ApiClient.instance.post('staff/create', body: payload);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchStaffMembers();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Staff member registered successfully!'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      setModalState(() => isSaving = false);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Registration error: $e')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredStaff;
@@ -217,6 +372,12 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
         elevation: 0,
         centerTitle: false,
         iconTheme: const IconThemeData(color: AppColors.light),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.primary,
+        onPressed: _showAddStaffModal,
+        icon: const Icon(Icons.person_add_alt, color: Colors.white),
+        label: const Text('Add Staff', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
       body: SafeArea(
         child: Column(

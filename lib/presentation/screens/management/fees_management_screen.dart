@@ -5,6 +5,7 @@ import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
+import 'package:edstream_mobile/presentation/widgets/custom_text_field.dart';
 import 'package:edstream_mobile/presentation/widgets/primary_button.dart';
 
 class FeesManagementScreen extends StatefulWidget {
@@ -291,10 +292,121 @@ class _FeesManagementScreenState extends State<FeesManagementScreen> with Single
     );
   }
 
+  void _showAddFeeScheduleModal() {
+    final amountController = TextEditingController();
+    final lateFeeController = TextEditingController(text: '5000');
+    final termController = TextEditingController(text: '3rd Term');
+    final sessionController = TextEditingController(text: '2024/2025');
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (modalCtx, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(modalCtx).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Create Fee Schedule', style: AppTypography.titleLarge),
+                const SizedBox(height: 4),
+                Text('Set institutional tuition fee rates and deadline parameters.', style: AppTypography.bodySmall),
+                const SizedBox(height: 16),
+
+                CustomTextField(labelText: 'Tuition Fee Amount (₦)', hintText: 'e.g. 75000', controller: amountController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Late Payment Fine (₦)', hintText: 'e.g. 5000', controller: lateFeeController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Academic Term', hintText: 'e.g. 1st Term, 3rd Term', controller: termController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Academic Session', hintText: 'e.g. 2024/2025', controller: sessionController),
+                const SizedBox(height: 24),
+
+                PrimaryButton(
+                  text: 'Publish Fee Schedule',
+                  isLoading: isSaving,
+                  onPressed: () async {
+                    final amt = double.tryParse(amountController.text.trim());
+                    if (amt == null || amt <= 0) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('Please enter a valid amount.')),
+                      );
+                      return;
+                    }
+
+                    setModalState(() => isSaving = true);
+                    final payload = {
+                      'amount': amt,
+                      'lateFees': double.tryParse(lateFeeController.text.trim()) ?? 5000.0,
+                      'term': termController.text.trim(),
+                      'session': sessionController.text.trim(),
+                      'openDate': DateTime.now().toIso8601String(),
+                      'closeDate': DateTime.now().add(const Duration(days: 90)).toIso8601String(),
+                    };
+
+                    try {
+                      await ApiClient.instance.post('schoolfees/create', body: payload);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      _fetchFeesData();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Fee schedule published successfully!'),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      setModalState(() => isSaving = false);
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('Failed: $e')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.primary,
+        onPressed: _showAddFeeScheduleModal,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Add Fee Schedule', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+      ),
       appBar: AppBar(
         title: Text(
           'School Fees Hub',
