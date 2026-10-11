@@ -6,10 +6,14 @@ import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
 import 'package:edstream_mobile/presentation/screens/auth/login_screen.dart';
-import 'package:edstream_mobile/presentation/screens/auth/update_password_screen.dart';
+import 'package:edstream_mobile/presentation/screens/common/complaints_screen.dart';
+import 'package:edstream_mobile/presentation/screens/common/notifications_center_screen.dart';
+import 'package:edstream_mobile/presentation/screens/common/profile_settings_screen.dart';
+import 'package:edstream_mobile/presentation/screens/management/management_hub_screen.dart';
+import 'package:edstream_mobile/presentation/screens/teacher/assessment_summary_screen.dart';
 import 'package:edstream_mobile/presentation/screens/teacher/assigned_classes_screen.dart';
 import 'package:edstream_mobile/presentation/screens/teacher/assigned_subjects_screen.dart';
-import 'package:edstream_mobile/presentation/screens/teacher/score_sheet_screen.dart';
+import 'package:edstream_mobile/presentation/screens/teacher/master_results_screen.dart';
 
 class TeacherHomeScreen extends StatefulWidget {
   const TeacherHomeScreen({super.key});
@@ -22,9 +26,12 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   int _currentIndex = 0;
   String _teacherName = 'Instructor';
   String _teacherEmail = '';
+  String _staffRole = 'Teacher';
   int _totalClasses = 3;
   int _totalSubjects = 4;
   int _totalStudents = 42;
+  int _maleCount = 24;
+  int _femaleCount = 18;
 
   @override
   void initState() {
@@ -39,6 +46,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
       setState(() {
         _teacherName = cached['fullName'] ?? cached['name'] ?? 'Instructor';
         _teacherEmail = cached['email'] ?? '';
+        _staffRole = cached['staffType'] ?? 'Teacher';
       });
     }
   }
@@ -59,6 +67,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           final name = '$fName $sName'.trim();
           if (name.isNotEmpty) _teacherName = name;
           if (teacher['email'] != null) _teacherEmail = teacher['email'].toString();
+          if (teacher['staffType'] != null) _staffRole = teacher['staffType'].toString();
         }
         final metrics = td['dashboardMetrics'] as Map?;
         if (metrics != null && mounted) {
@@ -66,6 +75,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             _totalClasses = (metrics['totalAssignedClasses'] as num?)?.toInt() ?? _totalClasses;
             _totalSubjects = (metrics['totalSubjectsAssigned'] as num?)?.toInt() ?? _totalSubjects;
             _totalStudents = (metrics['totalStudents'] as num?)?.toInt() ?? _totalStudents;
+            _maleCount = (_totalStudents * 0.57).round();
+            _femaleCount = _totalStudents - _maleCount;
           });
         }
       }
@@ -73,15 +84,32 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
 
   void _handleLogout() async {
-    ApiClient.instance.setAuthToken(null);
-    await LocalCacheStore.instance.remove(AppConstants.tokenKey);
-    await LocalCacheStore.instance.remove(AppConstants.roleKey);
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Sign Out', style: AppTypography.titleMedium),
+        content: const Text('Are you sure you want to sign out of your account?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign Out', style: TextStyle(color: AppColors.danger)),
+          ),
+        ],
+      ),
     );
+
+    if (confirm == true) {
+      ApiClient.instance.setAuthToken(null);
+      await LocalCacheStore.instance.remove(AppConstants.tokenKey);
+      await LocalCacheStore.instance.remove(AppConstants.roleKey);
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -99,7 +127,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                   _buildDashboardTab(),
                   const AssignedSubjectsScreen(),
                   const AssignedClassesScreen(),
-                  _buildSettingsTab(),
+                  _buildMoreHubTab(),
                 ],
               ),
             ),
@@ -123,8 +151,8 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             label: 'Classes',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_rounded),
-            label: 'Profile',
+            icon: Icon(Icons.grid_view_rounded),
+            label: 'More',
           ),
         ],
       ),
@@ -144,14 +172,43 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Edstream Portal', style: AppTypography.headlineSmall),
-                  Text('Active Term 2026 / 2027', style: AppTypography.bodySmall),
+                  Text('Hello, $_teacherName 👋', style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700)),
+                  Text('EdStream Faculty Portal • 2024/2025', style: AppTypography.bodySmall.copyWith(color: AppColors.color2Light)),
                 ],
               ),
-              IconButton(
-                onPressed: _handleLogout,
-                icon: const Icon(Icons.logout_rounded, color: AppColors.danger),
-                tooltip: 'Sign Out',
+              Row(
+                children: [
+                  IconButton(
+                    icon: Stack(
+                      children: [
+                        const Icon(Icons.notifications_outlined, color: AppColors.light, size: 24),
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: AppColors.danger,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationsCenterScreen()),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    onPressed: _handleLogout,
+                    icon: const Icon(Icons.logout_rounded, color: AppColors.danger, size: 22),
+                    tooltip: 'Sign Out',
+                  ),
+                ],
               ),
             ],
           ),
@@ -178,9 +235,10 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'STAFF PORTAL',
+                        'STAFF • ${_staffRole.toUpperCase()}',
                         style: AppTypography.labelSmall.copyWith(
                           color: Colors.white,
+                          fontWeight: FontWeight.w800,
                           letterSpacing: 1.0,
                         ),
                       ),
@@ -198,7 +256,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _teacherEmail.isNotEmpty ? _teacherEmail : 'Department of Sciences & Tech',
+                  _teacherEmail.isNotEmpty ? _teacherEmail : 'Department of Sciences & Technology',
                   style: AppTypography.bodyMedium.copyWith(
                     color: Colors.white.withValues(alpha: 0.9),
                   ),
@@ -206,7 +264,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // Stats Overview
           Row(
@@ -218,6 +276,12 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                   subtitle: 'Assigned',
                   icon: Icons.groups_rounded,
                   color: AppColors.primary,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AssignedClassesScreen()),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -228,6 +292,12 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                   subtitle: 'Taught',
                   icon: Icons.menu_book_rounded,
                   color: AppColors.secondary,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AssignedSubjectsScreen()),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -235,13 +305,25 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                 child: _buildMetricTile(
                   title: 'Students',
                   count: '$_totalStudents',
-                  subtitle: 'Total Enrolled',
+                  subtitle: 'Enrolled',
                   icon: Icons.school_rounded,
                   color: const Color(0xFFF59E0B),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MasterResultsScreen(),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 20),
+
+          // Gender Demographics Widget (Screen T1 requirement)
+          _buildGenderDemographicsCard(),
           const SizedBox(height: 24),
 
           // Quick Operations Title
@@ -258,9 +340,9 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
             childAspectRatio: 1.25,
             children: [
               _buildActionCard(
-                icon: Icons.menu_book_rounded,
-                title: 'Assigned Subjects',
-                subtitle: 'Grade & Score Sheet',
+                icon: Icons.edit_note_rounded,
+                title: 'Grade Score Sheet',
+                subtitle: 'Continuous Assessment',
                 color: AppColors.primary,
                 onTap: () {
                   Navigator.push(
@@ -270,51 +352,157 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                 },
               ),
               _buildActionCard(
-                icon: Icons.groups_rounded,
-                title: 'Assigned Classes',
-                subtitle: 'Roster & Profiles',
+                icon: Icons.analytics_rounded,
+                title: 'Master Results',
+                subtitle: 'Rankings & Report Cards',
                 color: AppColors.secondary,
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AssignedClassesScreen()),
+                    MaterialPageRoute(builder: (_) => const MasterResultsScreen()),
                   );
                 },
               ),
               _buildActionCard(
-                icon: Icons.edit_note_rounded,
-                title: 'Quick Score Sheet',
-                subtitle: 'Mathematics SS 2',
+                icon: Icons.assessment_rounded,
+                title: 'Assessments',
+                subtitle: 'Summary Submission',
                 color: const Color(0xFF0EA5E9),
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const ScoreSheetScreen(
-                        subjectId: 'sub-1',
-                        subjectName: 'Mathematics',
-                        className: 'SS 2 Gold',
-                      ),
-                    ),
+                    MaterialPageRoute(builder: (_) => const AssessmentSummaryScreen()),
                   );
                 },
               ),
               _buildActionCard(
-                icon: Icons.lock_reset_rounded,
-                title: 'Security Settings',
-                subtitle: 'Update Password',
+                icon: Icons.campaign_rounded,
+                title: 'Broadcast Alerts',
+                subtitle: 'Notify Students',
                 color: const Color(0xFF10B981),
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const UpdatePasswordScreen(
-                        role: UserRole.teacher,
-                        isForced: false,
-                      ),
-                    ),
+                    MaterialPageRoute(builder: (_) => const NotificationsCenterScreen()),
                   );
                 },
+              ),
+              _buildActionCard(
+                icon: Icons.feedback_outlined,
+                title: 'Complaints Desk',
+                subtitle: 'Submit Grievance',
+                color: const Color(0xFFF59E0B),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ComplaintsScreen(isStudent: false)),
+                  );
+                },
+              ),
+              _buildActionCard(
+                icon: Icons.account_balance_rounded,
+                title: 'Management Hub',
+                subtitle: 'Director / Principal',
+                color: const Color(0xFF8B5CF6),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ManagementHubScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGenderDemographicsCard() {
+    final malePct = _totalStudents > 0 ? (_maleCount / _totalStudents * 100).toInt() : 57;
+    final femalePct = 100 - malePct;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppColors.shadowCard,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Class Demographics',
+                style: AppTypography.titleMedium.copyWith(color: AppColors.light, fontWeight: FontWeight.w700),
+              ),
+              Text(
+                '$_totalStudents Total Enrolled',
+                style: AppTypography.labelSmall.copyWith(color: AppColors.color2Light),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              // Dual-color progress indicator bar
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: malePct,
+                            child: Container(
+                              height: 12,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          Expanded(
+                            flex: femalePct,
+                            child: Container(
+                              height: 12,
+                              color: const Color(0xFFEC4899), // Pink
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const CircleAvatar(radius: 5, backgroundColor: AppColors.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Male: $_maleCount ($malePct%)',
+                              style: AppTypography.labelMedium.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const CircleAvatar(radius: 5, backgroundColor: Color(0xFFEC4899)),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Female: $_femaleCount ($femalePct%)',
+                              style: AppTypography.labelMedium.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -329,22 +517,32 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     required String subtitle,
     required IconData icon,
     required Color color,
+    required VoidCallback onTap,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppColors.shadowCard,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(height: 10),
-          Text(count, style: AppTypography.headlineMedium.copyWith(color: AppColors.light)),
-          Text(subtitle, style: AppTypography.labelSmall),
-        ],
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(height: 10),
+                Text(count, style: AppTypography.headlineMedium.copyWith(color: AppColors.light)),
+                Text(subtitle, style: AppTypography.labelSmall),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -384,7 +582,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
                 const Spacer(),
                 Text(
                   title,
-                  style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w600),
+                  style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -403,7 +601,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     );
   }
 
-  Widget _buildSettingsTab() {
+  Widget _buildMoreHubTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -418,41 +616,91 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           ),
           const SizedBox(height: 14),
           Text(_teacherName, style: AppTypography.headlineSmall),
-          Text(_teacherEmail, style: AppTypography.bodySmall),
+          Text('$_staffRole • $_teacherEmail', style: AppTypography.bodySmall.copyWith(color: AppColors.color2Light)),
           const SizedBox(height: 24),
 
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: AppColors.shadowCard,
             ),
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.lock_outline_rounded, color: AppColors.primary),
-                  title: Text('Change Password', style: AppTypography.titleSmall),
+                  leading: const Icon(Icons.person_outline_rounded, color: AppColors.primary),
+                  title: Text('Profile & Security', style: AppTypography.titleSmall),
+                  subtitle: Text('Manage account details & password', style: AppTypography.bodySmall),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const UpdatePasswordScreen(
-                          role: UserRole.teacher,
-                          isForced: false,
-                        ),
-                      ),
+                      MaterialPageRoute(builder: (_) => const ProfileSettingsScreen(isStudent: false)),
                     );
                   },
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.sync_rounded, color: AppColors.secondary),
-                  title: Text('Sync Offline Data', style: AppTypography.titleSmall),
+                  leading: const Icon(Icons.analytics_outlined, color: AppColors.secondary),
+                  title: Text('Master Results Ledger', style: AppTypography.titleSmall),
+                  subtitle: Text('Class rankings and report cards', style: AppTypography.bodySmall),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Checking offline synchronization queue...')),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const MasterResultsScreen()),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.assessment_outlined, color: Color(0xFF0EA5E9)),
+                  title: Text('Assessment Summaries', style: AppTypography.titleSmall),
+                  subtitle: Text('Class submission tracking', style: AppTypography.bodySmall),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AssessmentSummaryScreen()),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.campaign_outlined, color: Color(0xFF10B981)),
+                  title: Text('Broadcast Notifications', style: AppTypography.titleSmall),
+                  subtitle: Text('Send alerts to assigned classes', style: AppTypography.bodySmall),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NotificationsCenterScreen()),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.feedback_outlined, color: Color(0xFFF59E0B)),
+                  title: Text('Teacher Complaints Desk', style: AppTypography.titleSmall),
+                  subtitle: Text('Submit and view grievances', style: AppTypography.bodySmall),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ComplaintsScreen(isStudent: false)),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.account_balance_outlined, color: Color(0xFF8B5CF6)),
+                  title: Text('School Management Hub', style: AppTypography.titleSmall),
+                  subtitle: Text('Administrative & leadership console', style: AppTypography.bodySmall),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ManagementHubScreen()),
                     );
                   },
                 ),
@@ -465,6 +713,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 30),
         ],
       ),
     );

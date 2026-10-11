@@ -80,4 +80,6 @@ class LocalCacheStore {
     await init();
     return _requirePrefs.clear();
   }
+
+  Future<bool> clear() => clearAll();
 }

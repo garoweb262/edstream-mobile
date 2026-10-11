@@ -6,7 +6,9 @@ import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
 import 'package:edstream_mobile/presentation/screens/auth/login_screen.dart';
-import 'package:edstream_mobile/presentation/screens/auth/update_password_screen.dart';
+import 'package:edstream_mobile/presentation/screens/common/complaints_screen.dart';
+import 'package:edstream_mobile/presentation/screens/common/notifications_center_screen.dart';
+import 'package:edstream_mobile/presentation/screens/common/profile_settings_screen.dart';
 import 'package:edstream_mobile/presentation/screens/student/results_screen.dart';
 import 'package:edstream_mobile/presentation/screens/student/school_fees_screen.dart';
 import 'package:edstream_mobile/presentation/screens/student/timetable_screen.dart';
@@ -73,15 +75,32 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
   }
 
   void _handleLogout() async {
-    ApiClient.instance.setAuthToken(null);
-    await LocalCacheStore.instance.remove(AppConstants.tokenKey);
-    await LocalCacheStore.instance.remove(AppConstants.roleKey);
-    if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Sign Out', style: AppTypography.titleMedium),
+        content: const Text('Are you sure you want to sign out of your account?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign Out', style: TextStyle(color: AppColors.danger)),
+          ),
+        ],
+      ),
     );
+
+    if (confirm == true) {
+      ApiClient.instance.setAuthToken(null);
+      await LocalCacheStore.instance.remove(AppConstants.tokenKey);
+      await LocalCacheStore.instance.remove(AppConstants.roleKey);
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   @override
@@ -99,7 +118,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   _buildDashboardTab(),
                   const ResultsScreen(),
                   const SchoolFeesScreen(),
-                  _buildProfileTab(),
+                  _buildMoreHubTab(),
                 ],
               ),
             ),
@@ -123,8 +142,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
             label: 'Fees',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_rounded),
-            label: 'Profile',
+            icon: Icon(Icons.grid_view_rounded),
+            label: 'More',
           ),
         ],
       ),
@@ -144,14 +163,43 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Student Space', style: AppTypography.headlineSmall),
-                  Text('Edstream Academic Portal', style: AppTypography.bodySmall),
+                  Text('Welcome, $_studentName 👋', style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w700)),
+                  Text('EdStream Student Portal • Active Term', style: AppTypography.bodySmall.copyWith(color: AppColors.color2Light)),
                 ],
               ),
-              IconButton(
-                onPressed: _handleLogout,
-                icon: const Icon(Icons.logout_rounded, color: AppColors.danger),
-                tooltip: 'Sign Out',
+              Row(
+                children: [
+                  IconButton(
+                    icon: Stack(
+                      children: [
+                        const Icon(Icons.notifications_outlined, color: AppColors.light, size: 24),
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: AppColors.danger,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationsCenterScreen()),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    onPressed: _handleLogout,
+                    icon: const Icon(Icons.logout_rounded, color: AppColors.danger, size: 22),
+                    tooltip: 'Sign Out',
+                  ),
+                ],
               ),
             ],
           ),
@@ -182,6 +230,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                         style: AppTypography.labelSmall.copyWith(
                           color: Colors.white,
                           letterSpacing: 1.0,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
@@ -233,7 +282,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                  const Icon(Icons.school_rounded, color: Color(0xFFD97706), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -248,7 +297,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // Performance Quick Metrics
           Row(
@@ -256,9 +305,15 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               Expanded(
                 child: _buildMetricTile(
                   title: 'Average',
-                  value: '84.0%',
-                  label: '1st Term',
+                  value: '84.8%',
+                  label: '3rd Term',
                   color: AppColors.primary,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ResultsScreen()),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -268,6 +323,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                   value: '98%',
                   label: 'Present',
                   color: AppColors.success,
+                  onTap: () {},
                 ),
               ),
               const SizedBox(width: 12),
@@ -275,8 +331,14 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 child: _buildMetricTile(
                   title: 'Class Rank',
                   value: '2nd',
-                  label: 'Out of 42',
+                  label: 'Out of 38',
                   color: const Color(0xFFF59E0B),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ResultsScreen()),
+                    );
+                  },
                 ),
               ),
             ],
@@ -310,7 +372,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               _buildModuleCard(
                 icon: Icons.account_balance_wallet_rounded,
                 title: 'School Fees',
-                subtitle: 'Invoices & Receipts',
+                subtitle: 'Invoices & Paystack',
                 color: const Color(0xFFF59E0B),
                 onTap: () {
                   Navigator.push(
@@ -321,7 +383,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
               ),
               _buildModuleCard(
                 icon: Icons.calendar_month_rounded,
-                title: 'Timetable',
+                title: 'Class Timetable',
                 subtitle: 'Daily Periods',
                 color: const Color(0xFF8B5CF6),
                 onTap: () {
@@ -332,24 +394,44 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 },
               ),
               _buildModuleCard(
-                icon: Icons.lock_reset_rounded,
-                title: 'Password',
-                subtitle: 'Security Update',
+                icon: Icons.feedback_outlined,
+                title: 'Grievance Desk',
+                subtitle: 'Student Complaints',
+                color: const Color(0xFFEC4899),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ComplaintsScreen(isStudent: true)),
+                  );
+                },
+              ),
+              _buildModuleCard(
+                icon: Icons.notifications_active_outlined,
+                title: 'Announcements',
+                subtitle: 'Broadcast Alerts',
+                color: const Color(0xFF0EA5E9),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NotificationsCenterScreen()),
+                  );
+                },
+              ),
+              _buildModuleCard(
+                icon: Icons.person_outline_rounded,
+                title: 'My Profile',
+                subtitle: 'Settings & Security',
                 color: const Color(0xFF10B981),
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const UpdatePasswordScreen(
-                        role: UserRole.student,
-                        isForced: false,
-                      ),
-                    ),
+                    MaterialPageRoute(builder: (_) => const ProfileSettingsScreen(isStudent: true)),
                   );
                 },
               ),
             ],
           ),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -360,28 +442,38 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     required String value,
     required String label,
     required Color color,
+    required VoidCallback onTap,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppColors.shadowCard,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTypography.labelSmall),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: AppTypography.headlineMedium.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AppTypography.labelSmall),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: AppTypography.headlineMedium.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(label, style: AppTypography.bodySmall),
+              ],
             ),
           ),
-          Text(label, style: AppTypography.bodySmall),
-        ],
+        ),
       ),
     );
   }
@@ -421,7 +513,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
                 const Spacer(),
                 Text(
                   title,
-                  style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w600),
+                  style: AppTypography.titleSmall.copyWith(fontWeight: FontWeight.w700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -440,7 +532,7 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     );
   }
 
-  Widget _buildProfileTab() {
+  Widget _buildMoreHubTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -455,55 +547,78 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           ),
           const SizedBox(height: 14),
           Text(_studentName, style: AppTypography.headlineSmall),
-          Text('Reg No: $_regNumber', style: AppTypography.bodySmall),
+          Text('Reg No: $_regNumber • $_className', style: AppTypography.bodySmall.copyWith(color: AppColors.color2Light)),
           const SizedBox(height: 24),
 
           Container(
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(20),
               boxShadow: AppColors.shadowCard,
             ),
             child: Column(
               children: [
                 ListTile(
-                  leading: const Icon(Icons.lock_outline_rounded, color: AppColors.primary),
-                  title: Text('Change Password', style: AppTypography.titleSmall),
+                  leading: const Icon(Icons.person_outline_rounded, color: AppColors.primary),
+                  title: Text('Profile & Security', style: AppTypography.titleSmall),
+                  subtitle: Text('Manage credentials & password', style: AppTypography.bodySmall),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const UpdatePasswordScreen(
-                          role: UserRole.student,
-                          isForced: false,
-                        ),
-                      ),
+                      MaterialPageRoute(builder: (_) => const ProfileSettingsScreen(isStudent: true)),
                     );
                   },
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.receipt_long_rounded, color: AppColors.secondary),
-                  title: Text('View Invoices & Receipts', style: AppTypography.titleSmall),
+                  leading: const Icon(Icons.calendar_month_outlined, color: Color(0xFF8B5CF6)),
+                  title: Text('Class Timetable', style: AppTypography.titleSmall),
+                  subtitle: Text('Daily subject period schedule', style: AppTypography.bodySmall),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const SchoolFeesScreen()),
+                      MaterialPageRoute(builder: (_) => const TimetableScreen()),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.feedback_outlined, color: Color(0xFFEC4899)),
+                  title: Text('Student Grievance Desk', style: AppTypography.titleSmall),
+                  subtitle: Text('Submit and view complaints', style: AppTypography.bodySmall),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ComplaintsScreen(isStudent: true)),
+                    );
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.notifications_active_outlined, color: Color(0xFF0EA5E9)),
+                  title: Text('Broadcast Announcements', style: AppTypography.titleSmall),
+                  subtitle: Text('School and teacher alerts', style: AppTypography.bodySmall),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NotificationsCenterScreen()),
                     );
                   },
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.logout_rounded, color: AppColors.danger),
-                  title: Text('Sign Out',
-                      style: AppTypography.titleSmall.copyWith(color: AppColors.danger)),
+                  title: Text('Sign Out', style: AppTypography.titleSmall.copyWith(color: AppColors.danger)),
                   onTap: _handleLogout,
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 30),
         ],
       ),
     );

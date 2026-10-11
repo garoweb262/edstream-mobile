@@ -10,6 +10,7 @@ class PrimaryButton extends StatelessWidget {
     this.isLoading = false,
     this.useGradient = true,
     this.icon,
+    this.color,
   });
 
   final String text;
@@ -17,19 +18,25 @@ class PrimaryButton extends StatelessWidget {
   final bool isLoading;
   final bool useGradient;
   final Widget? icon;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? AppColors.primary;
+    final hasCustomColor = color != null;
+
     return Container(
       width: double.infinity,
       height: 54,
       decoration: BoxDecoration(
-        gradient: (useGradient && onPressed != null && !isLoading)
+        gradient: (useGradient && !hasCustomColor && onPressed != null && !isLoading)
             ? AppColors.primaryGradient
             : null,
-        color: (!useGradient && onPressed != null && !isLoading)
-            ? AppColors.primary
-            : (onPressed == null || isLoading ? AppColors.color4Light : AppColors.primary),
+        color: (hasCustomColor && onPressed != null && !isLoading)
+            ? effectiveColor
+            : (!useGradient && onPressed != null && !isLoading)
+                ? effectiveColor
+                : (onPressed == null || isLoading ? AppColors.color4Light : effectiveColor),
         borderRadius: BorderRadius.circular(14),
         boxShadow: (onPressed != null && !isLoading)
             ? [

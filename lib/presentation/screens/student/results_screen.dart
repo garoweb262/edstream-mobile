@@ -4,6 +4,7 @@ import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
+import 'package:edstream_mobile/presentation/screens/common/report_card_view_screen.dart';
 
 class ResultsScreen extends StatefulWidget {
   const ResultsScreen({super.key});
@@ -267,6 +268,49 @@ class _ResultsScreenState extends State<ResultsScreen> {
                                     Container(width: 1, height: 40, color: Colors.white24),
                                     _buildHeroMetric('Total Marks', _totalMarks.toInt().toString()),
                                   ],
+                                ),
+                                const SizedBox(height: 16),
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ReportCardViewScreen(
+                                          studentName: 'Alex Johnson Chukwuma',
+                                          regNumber: 'EDS/2026/0491',
+                                          className: 'SS 2 Gold',
+                                          session: _session,
+                                          term: _termName,
+                                          average: _average,
+                                          position: _position,
+                                          totalStudents: 38,
+                                          subjects: _subjects,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.description_rounded, size: 18, color: AppColors.primary),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'View Official Printable Report Card',
+                                          style: AppTypography.labelMedium.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
