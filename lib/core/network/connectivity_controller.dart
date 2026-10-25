@@ -3,62 +3,66 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:edstream_mobile/core/network/offline_sync_service.dart';
 
-/// Monitors device network connectivity status in real time.
-/// Triggers offline queue flushing when network is restored.
+/// Tracks whether the app can reach Edstream. Wi-Fi being on is not enough,
+/// so real request results (via [markReachable]) also count. Pending offline
+/// changes are sent when the connection comes back, at start-up, and every
+/// minute while online.
 class ConnectivityController extends ChangeNotifier {
-  ConnectivityController._() {
-    _init();
-  }
+  ConnectivityController._();
 
   static final ConnectivityController instance = ConnectivityController._();
 
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _subscription;
+  Timer? _timer;
+  bool _started = false;
 
   bool _isOnline = true;
-  bool _wasOffline = false;
 
   bool get isOnline => _isOnline;
   bool get isOffline => !_isOnline;
 
-  Future<void> _init() async {
+  /// Call once at app start.
+  Future<void> start() async {
+    if (_started) return;
+    _started = true;
     try {
-      final results = await _connectivity.checkConnectivity();
-      _updateStatus(results);
+      _updateStatus(await _connectivity.checkConnectivity());
     } catch (_) {
       _isOnline = true;
     }
-
-    _subscription = _connectivity.onConnectivityChanged.listen((results) {
-      _updateStatus(results);
+    _subscription = _connectivity.onConnectivityChanged.listen(_updateStatus);
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_isOnline) OfflineSyncService.instance.flushPendingMutations();
     });
+    if (_isOnline) OfflineSyncService.instance.flushPendingMutations();
+  }
+
+  void _setOnline(bool value) {
+    if (_isOnline == value) return;
+    final cameBack = value && !_isOnline;
+    _isOnline = value;
+    notifyListeners();
+    if (cameBack) OfflineSyncService.instance.flushPendingMutations();
   }
 
   void _updateStatus(List<ConnectivityResult> results) {
-    final nowOnline = results.any((r) => r != ConnectivityResult.none);
-
-    // If reconnecting from an offline state, trigger sync
-    if (nowOnline && _wasOffline) {
-      OfflineSyncService.instance.flushPendingMutations();
-    }
-
-    _wasOffline = !nowOnline;
-    if (_isOnline != nowOnline) {
-      _isOnline = nowOnline;
-      notifyListeners();
-    }
+    _setOnline(results.any((r) => r != ConnectivityResult.none));
   }
 
+  /// Called by ApiClient after each request: a reply means online, a
+  /// network failure means offline.
+  void markReachable(bool reachable) => _setOnline(reachable);
+
   Future<bool> checkConnection() async {
-    final results = await _connectivity.checkConnectivity();
-    _isOnline = results.any((r) => r != ConnectivityResult.none);
-    notifyListeners();
+    _updateStatus(await _connectivity.checkConnectivity());
     return _isOnline;
   }
 
   @override
   void dispose() {
     _subscription?.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 }

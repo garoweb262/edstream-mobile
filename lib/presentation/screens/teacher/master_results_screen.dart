@@ -78,13 +78,13 @@ class _MasterResultsScreenState extends State<MasterResultsScreen> {
                       if (s is Map) {
                         return {
                           'subject': s['name'] ?? s['subjectName'] ?? s['subject'] ?? 'Subject',
-                          'ca1': (s['test1'] as num?)?.toDouble() ?? (s['ca1'] as num?)?.toDouble() ?? 0.0,
-                          'ca2': (s['test2'] as num?)?.toDouble() ?? (s['ca2'] as num?)?.toDouble() ?? 0.0,
-                          'ca3': (s['test3'] as num?)?.toDouble() ?? (s['ca3'] as num?)?.toDouble() ?? 0.0,
+                          'ca1': (s['firstCA'] as num?)?.toDouble() ?? (s['ca1'] as num?)?.toDouble() ?? 0.0,
+                          'ca2': (s['secondCA'] as num?)?.toDouble() ?? (s['ca2'] as num?)?.toDouble() ?? 0.0,
+                          'ca3': (s['thirdCA'] as num?)?.toDouble() ?? (s['ca3'] as num?)?.toDouble() ?? 0.0,
                           'exam': (s['exam'] as num?)?.toDouble() ?? 0.0,
                           'total': (s['total'] as num?)?.toDouble() ?? (s['totalScore'] as num?)?.toDouble() ?? 0.0,
-                          'grade': s['grade']?.toString() ?? 'A',
-                          'remark': s['remark']?.toString() ?? 'Good',
+                          'grade': s['grade']?.toString() ?? '—',
+                          'remark': s['remark']?.toString() ?? '',
                         };
                       }
                       return {};
@@ -94,13 +94,14 @@ class _MasterResultsScreenState extends State<MasterResultsScreen> {
                       'studentName': studentInfo['name'] ?? r['studentName'] ?? 'Student',
                       'regNumber': studentInfo['registrationNumber'] ?? studentInfo['regNo'] ?? r['registrationNumber'] ?? '',
                       'class': '${classInfo['code'] ?? cls['classCode'] ?? ''} ${classInfo['subclass'] ?? cls['subclass'] ?? ''}'.trim(),
-                      'session': sessionStr.isNotEmpty ? sessionStr : '2024/2025',
-                      'term': termStr.isNotEmpty ? termStr : '3rd Term',
+                      'session': sessionStr,
+                      'term': termStr,
                       'average': (academicInfo['average'] as num?)?.toDouble() ?? (r['average'] as num?)?.toDouble() ?? 0.0,
-                      'position': academicInfo['position'] ?? r['position'] ?? 1,
-                      'totalStudents': classInfo['totalStudents'] ?? cls['totalStudents'] ?? 40,
-                      'grade': academicInfo['grade'] ??
-                          (((academicInfo['average'] as num?)?.toDouble() ?? 0) >= 70 ? 'A' : 'B'),
+                      'position': academicInfo['rankingMethod'] == 'average' ? null : (academicInfo['position'] ?? r['position']),
+                      'totalStudents': classInfo['totalStudents'] ?? cls['totalStudents'] ?? 0,
+                      'grade': academicInfo['grade'] ?? '—',
+                      'teacherFeedback': r['teacherFeedback']?.toString() ?? '',
+                      'headTeacherComment': r['headTeacherComment']?.toString() ?? '',
                       'subjects': mappedSubjects,
                       'raw': r,
                     });
@@ -135,74 +136,8 @@ class _MasterResultsScreenState extends State<MasterResultsScreen> {
   }
 
   void _loadDefaultMockResults() {
-    _results = [
-      {
-        'studentName': 'Zainab Ahmed Al-Hassan',
-        'regNumber': 'EDS/2026/0412',
-        'class': 'SS 2 Gold',
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'average': 89.4,
-        'position': 1,
-        'totalStudents': 42,
-        'grade': 'A',
-      },
-      {
-        'studentName': 'Alex Johnson Chukwuma',
-        'regNumber': 'EDS/2026/0491',
-        'class': 'SS 2 Gold',
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'average': 84.8,
-        'position': 2,
-        'totalStudents': 42,
-        'grade': 'A',
-      },
-      {
-        'studentName': 'Fatima Umar Sadiq',
-        'regNumber': 'EDS/2026/0438',
-        'class': 'SS 2 Gold',
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'average': 81.2,
-        'position': 3,
-        'totalStudents': 42,
-        'grade': 'A',
-      },
-      {
-        'studentName': 'David Oluwaseun Adeleke',
-        'regNumber': 'EDS/2026/0455',
-        'class': 'SS 2 Gold',
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'average': 76.5,
-        'position': 4,
-        'totalStudents': 42,
-        'grade': 'B',
-      },
-      {
-        'studentName': 'Maryam Kabir Mohammed',
-        'regNumber': 'EDS/2026/0471',
-        'class': 'SS 2 Gold',
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'average': 72.0,
-        'position': 5,
-        'totalStudents': 42,
-        'grade': 'B',
-      },
-      {
-        'studentName': 'Emmanuel Kalu Nnadi',
-        'regNumber': 'EDS/2026/0488',
-        'class': 'SS 2 Gold',
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'average': 68.3,
-        'position': 6,
-        'totalStudents': 42,
-        'grade': 'C',
-      },
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _results = [];
   }
 
   List<Map<String, dynamic>> get _filteredResults {
@@ -397,8 +332,8 @@ class _MasterResultsScreenState extends State<MasterResultsScreen> {
     final regNo = item['regNumber'] ?? '';
     final avg = (item['average'] as num?)?.toDouble() ?? 0.0;
     final pos = item['position'] as int?;
-    final totalStudents = (item['totalStudents'] as num?)?.toInt() ?? 42;
-    final grade = item['grade'] ?? 'A';
+    final totalStudents = (item['totalStudents'] as num?)?.toInt() ?? 0;
+    final grade = item['grade'] ?? '—';
 
     final isTop3 = pos != null && pos <= 3;
 
@@ -520,6 +455,8 @@ class _MasterResultsScreenState extends State<MasterResultsScreen> {
                           position: pos,
                           totalStudents: totalStudents,
                           subjects: item['subjects'] as List<Map<String, dynamic>>?,
+                          teacherFeedback: item['teacherFeedback']?.toString() ?? '',
+                          headTeacherComment: item['headTeacherComment']?.toString() ?? '',
                         ),
                       ),
                     );

@@ -83,21 +83,15 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> with Si
   }
 
   void _loadMockCalendar() {
-    _sessions = [
-      {'_id': 'ses-1', 'session': '2024/2025', 'status': 'active'},
-      {'_id': 'ses-2', 'session': '2023/2024', 'status': 'completed'},
-      {'_id': 'ses-3', 'session': '2022/2023', 'status': 'completed'},
-    ];
-    _terms = [
-      {'_id': 't-1', 'term': '1st Term', 'name': '1st Term', 'status': 'completed'},
-      {'_id': 't-2', 'term': '2nd Term', 'name': '2nd Term', 'status': 'completed'},
-      {'_id': 't-3', 'term': '3rd Term', 'name': '3rd Term', 'status': 'active'},
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _sessions = [];
+    _terms = [];
   }
 
   void _showAddSessionModal() {
     final sessionController = TextEditingController();
     bool isSaving = false;
+    DateTimeRange? range;
 
     showModalBottomSheet(
       context: context,
@@ -135,16 +129,23 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> with Si
               Text('Example: 2025/2026', style: AppTypography.bodySmall),
               const SizedBox(height: 16),
               CustomTextField(labelText: 'Academic Session', hintText: 'YYYY/YYYY', controller: sessionController),
+              const SizedBox(height: 12),
+              _dateRangeButton(context, range, (r) => setModalState(() => range = r)),
               const SizedBox(height: 24),
               PrimaryButton(
                 text: 'Create Session',
                 isLoading: isSaving,
                 onPressed: () async {
-                  if (sessionController.text.trim().isEmpty) return;
+                  if (sessionController.text.trim().isEmpty || range == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Enter the session and pick its start and end dates.')));
+                    return;
+                  }
                   setModalState(() => isSaving = true);
                   try {
-                    await ApiClient.instance.post('session/create', body: {
+                    await ApiClient.instance.send('POST', 'session/create', feature: 'academics', label: 'New session ${sessionController.text.trim()}', body: {
                       'session': sessionController.text.trim(),
+                      'openDate': range!.start.toIso8601String(),
+                      'closeDate': range!.end.toIso8601String(),
                     });
                     if (ctx.mounted) Navigator.pop(ctx);
                     _loadCalendarData();
@@ -164,7 +165,8 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> with Si
   }
 
   void _showAddTermModal() {
-    final termNameController = TextEditingController();
+    String termCode = '1st';
+    DateTimeRange? range;
     String? selectedSessionId = _sessions.isNotEmpty ? _sessions.first['_id']?.toString() : null;
     bool isSaving = false;
 
@@ -201,7 +203,18 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> with Si
               const SizedBox(height: 16),
               Text('Create Academic Term', style: AppTypography.titleLarge),
               const SizedBox(height: 16),
-              CustomTextField(labelText: 'Term Name', hintText: 'e.g. 1st Term, Summer Term', controller: termNameController),
+              Text('Term', style: AppTypography.labelMedium),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: ['1st', '2nd', '3rd']
+                    .map((t) => ChoiceChip(
+                          label: Text('$t Term'),
+                          selected: termCode == t,
+                          onSelected: (_) => setModalState(() => termCode = t),
+                        ))
+                    .toList(),
+              ),
               const SizedBox(height: 12),
               Text('Session', style: AppTypography.labelMedium),
               const SizedBox(height: 6),
@@ -224,18 +237,27 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> with Si
                   onChanged: (val) => setModalState(() => selectedSessionId = val),
                 ),
               ),
+              const SizedBox(height: 12),
+              _dateRangeButton(context, range, (r) => setModalState(() => range = r)),
               const SizedBox(height: 24),
               PrimaryButton(
                 text: 'Create Term',
                 isLoading: isSaving,
                 onPressed: () async {
-                  if (termNameController.text.trim().isEmpty) return;
+                  final sessionName = _sessions.where((x) => x['_id']?.toString() == selectedSessionId).map((x) => x['session']?.toString()).firstOrNull;
+                  if (sessionName == null || range == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Pick the session and the term dates.')));
+                    return;
+                  }
                   setModalState(() => isSaving = true);
+                  String day(DateTime d) => d.toIso8601String().substring(0, 10);
                   try {
-                    await ApiClient.instance.post('term', body: {
-                      'name': termNameController.text.trim(),
-                      'term': termNameController.text.trim(),
-                      'session': selectedSessionId,
+                    // The server stores the term against the session name.
+                    await ApiClient.instance.send('POST', 'term', feature: 'academics', label: 'New $termCode term', body: {
+                      'term': termCode,
+                      'session': sessionName,
+                      'openDate': day(range!.start),
+                      'closeDate': day(range!.end),
                     });
                     if (ctx.mounted) Navigator.pop(ctx);
                     _loadCalendarData();
@@ -251,6 +273,23 @@ class _AcademicCalendarScreenState extends State<AcademicCalendarScreen> with Si
           ),
         ),
       ),
+    );
+  }
+
+  Widget _dateRangeButton(BuildContext context, DateTimeRange? range, ValueChanged<DateTimeRange> onPicked) {
+    String day(DateTime d) => d.toIso8601String().substring(0, 10);
+    return OutlinedButton.icon(
+      icon: const Icon(Icons.date_range_rounded),
+      label: Text(range == null ? 'Pick start and end dates' : '${day(range.start)} → ${day(range.end)}'),
+      onPressed: () async {
+        final picked = await showDateRangePicker(
+          context: context,
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2100),
+          initialDateRange: range,
+        );
+        if (picked != null) onPicked(picked);
+      },
     );
   }
 

@@ -13,84 +13,27 @@ class ReportCardViewScreen extends StatelessWidget {
   final int? position;
   final int totalStudents;
   final List<Map<String, dynamic>>? subjects;
+  final String teacherFeedback;
+  final String headTeacherComment;
 
   const ReportCardViewScreen({
     super.key,
     required this.studentName,
     required this.regNumber,
     required this.className,
-    this.session = '2024/2025',
-    this.term = '3rd Term',
-    this.average = 84.8,
-    this.position = 2,
-    this.totalStudents = 38,
+    this.session = '',
+    this.term = '',
+    this.average = 0,
+    this.position,
+    this.totalStudents = 0,
     this.subjects,
+    this.teacherFeedback = '',
+    this.headTeacherComment = '',
   });
 
   @override
   Widget build(BuildContext context) {
-    final list = subjects ?? [
-      {
-        'subject': 'Mathematics',
-        'ca1': 16.0,
-        'ca2': 18.0,
-        'ca3': 0.0,
-        'exam': 54.0,
-        'total': 88.0,
-        'grade': 'A',
-        'remark': 'Outstanding',
-      },
-      {
-        'subject': 'English Language',
-        'ca1': 15.0,
-        'ca2': 17.0,
-        'ca3': 0.0,
-        'exam': 51.0,
-        'total': 83.0,
-        'grade': 'A',
-        'remark': 'Very Good',
-      },
-      {
-        'subject': 'Physics',
-        'ca1': 17.0,
-        'ca2': 18.0,
-        'ca3': 0.0,
-        'exam': 52.0,
-        'total': 87.0,
-        'grade': 'A',
-        'remark': 'Excellent',
-      },
-      {
-        'subject': 'Chemistry',
-        'ca1': 14.0,
-        'ca2': 15.0,
-        'ca3': 0.0,
-        'exam': 48.0,
-        'total': 77.0,
-        'grade': 'B',
-        'remark': 'Good',
-      },
-      {
-        'subject': 'Biology',
-        'ca1': 15.0,
-        'ca2': 16.0,
-        'ca3': 0.0,
-        'exam': 49.0,
-        'total': 80.0,
-        'grade': 'A',
-        'remark': 'Very Good',
-      },
-      {
-        'subject': 'Civic Education',
-        'ca1': 18.0,
-        'ca2': 19.0,
-        'ca3': 0.0,
-        'exam': 56.0,
-        'total': 93.0,
-        'grade': 'A',
-        'remark': 'Exemplary',
-      },
-    ];
+    final list = subjects ?? const <Map<String, dynamic>>[];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -405,17 +348,17 @@ class ReportCardViewScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Form Master Remarks:', style: AppTypography.labelMedium),
+                        Text('Class Teacher\'s Comment:', style: AppTypography.labelMedium),
                         const SizedBox(height: 2),
                         Text(
-                          'An exceptionally brilliant and disciplined student. Maintains high academic focus and demonstrates leadership qualities in class.',
+                          teacherFeedback.isNotEmpty ? teacherFeedback : '—',
                           style: AppTypography.bodySmall.copyWith(fontStyle: FontStyle.italic),
                         ),
                         const SizedBox(height: 14),
-                        Text('Principal Evaluation:', style: AppTypography.labelMedium),
+                        Text('Head Teacher\'s Comment:', style: AppTypography.labelMedium),
                         const SizedBox(height: 2),
                         Text(
-                          'Outstanding performance. Approved for promotion to the next academic tier with commendation.',
+                          headTeacherComment.isNotEmpty ? headTeacherComment : '—',
                           style: AppTypography.bodySmall.copyWith(fontStyle: FontStyle.italic),
                         ),
                         const SizedBox(height: 18),

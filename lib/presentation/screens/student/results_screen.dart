@@ -18,66 +18,21 @@ class _ResultsScreenState extends State<ResultsScreen> {
   int _selectedTerm = 3; // 1 = First, 2 = Second, 3 = Third
   bool _isLoading = true;
 
-  double _average = 84.8;
-  int _position = 2;
-  double _totalMarks = 504.0;
-  String _session = '2024/2025';
-  String _termName = '3rd Term';
-  String _studentName = 'Alex Johnson Chukwuma';
-  String _regNumber = 'EDS/2026/0491';
-  String _className = 'SS 2 Gold';
-  int _totalStudents = 38;
+  double _average = 0;
+  int _position = 0;
+  double _totalMarks = 0;
+  String _session = '';
+  String _termName = '';
+  String _studentName = '';
+  String _regNumber = '';
+  String _className = '';
+  int _totalStudents = 0;
+  String _teacherFeedback = '';
+  String _headTeacherComment = '';
+  bool _hasResult = false;
+  List<Map> _allResults = [];
 
-  List<Map<String, dynamic>> _subjects = [
-    {
-      'subject': 'Mathematics',
-      'ca': 35.0,
-      'exam': 54.0,
-      'total': 89.0,
-      'grade': 'A',
-      'remark': 'Outstanding',
-    },
-    {
-      'subject': 'English Language',
-      'ca': 32.0,
-      'exam': 50.0,
-      'total': 82.0,
-      'grade': 'A',
-      'remark': 'Very Good',
-    },
-    {
-      'subject': 'Physics',
-      'ca': 34.0,
-      'exam': 53.0,
-      'total': 87.0,
-      'grade': 'A',
-      'remark': 'Excellent',
-    },
-    {
-      'subject': 'Chemistry',
-      'ca': 28.0,
-      'exam': 48.0,
-      'total': 76.0,
-      'grade': 'B',
-      'remark': 'Good',
-    },
-    {
-      'subject': 'Biology',
-      'ca': 31.0,
-      'exam': 47.0,
-      'total': 78.0,
-      'grade': 'B',
-      'remark': 'Very Good',
-    },
-    {
-      'subject': 'Civic Education',
-      'ca': 36.0,
-      'exam': 56.0,
-      'total': 92.0,
-      'grade': 'A',
-      'remark': 'Exemplary',
-    },
-  ];
+  List<Map<String, dynamic>> _subjects = [];
 
   @override
   void initState() {
@@ -96,30 +51,47 @@ class _ResultsScreenState extends State<ResultsScreen> {
     _fetchResults();
   }
 
+  // 1 = 1st term, 2 = 2nd, 3 = 3rd, from a term name like "2nd".
+  int _termNumber(dynamic term) {
+    final t = (term is Map ? term['term'] : term)?.toString() ?? '';
+    if (t.startsWith('1')) return 1;
+    if (t.startsWith('2')) return 2;
+    return 3;
+  }
+
+  void _selectTerm(int term) {
+    final match = _allResults.where((r) => _termNumber(r['term']) == term).toList();
+    setState(() {
+      _selectedTerm = term;
+      _hasResult = match.isNotEmpty;
+      if (match.isNotEmpty) _applyResultData(match.first);
+    });
+  }
+
   Future<void> _fetchResults() async {
-    const cacheKey = 'student_terminal_results';
-    final cached = LocalCacheStore.instance.getJson(cacheKey);
-
-    if (cached is Map) {
-      _applyResultData(cached);
-      setState(() => _isLoading = false);
-    }
-
     try {
-      final res = await ApiClient.instance.get(
-        'student/my-results',
-        cacheLocally: true,
-        cacheKey: cacheKey,
-      );
-
-      if (res is List && res.isNotEmpty) {
-        _applyResultData(res.first as Map);
-      } else if (res is Map && res['data'] is List && (res['data'] as List).isNotEmpty) {
-        _applyResultData((res['data'] as List).first as Map);
-      } else if (res is Map) {
-        _applyResultData(res);
+      // Same shape staff get from /result/results: sections → classes → results.
+      final res = await ApiClient.instance.get('result/my-results', queryParams: {'limit': 50});
+      final flat = <Map>[];
+      final groups = res is Map ? res['data'] : null;
+      if (groups is List) {
+        for (final g in groups) {
+          for (final c in (g is Map ? g['classes'] as List? ?? [] : [])) {
+            for (final r in (c is Map ? c['results'] as List? ?? [] : [])) {
+              if (r is Map) flat.add(r);
+            }
+          }
+        }
       }
-    } catch (_) {}
+      _allResults = flat;
+      if (flat.isNotEmpty) {
+        _selectTerm(_termNumber(flat.first['term']));
+      } else if (mounted) {
+        setState(() => _hasResult = false);
+      }
+    } catch (_) {
+      // No connection and nothing saved yet: the empty state explains it.
+    }
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -152,6 +124,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
       _totalMarks = (academic['totalMarks'] as num?)?.toDouble() ?? _totalMarks;
     }
 
+    _teacherFeedback = data['teacherFeedback']?.toString() ?? '';
+    _headTeacherComment = data['headTeacherComment']?.toString() ?? '';
+
     if (data['session'] is Map) {
       _session = data['session']['session'] ?? _session;
     } else if (data['session'] != null) {
@@ -170,17 +145,20 @@ class _ResultsScreenState extends State<ResultsScreen> {
       for (final s in rawSubs) {
         if (s is Map) {
           final sName = s['subjectName'] ?? s['subject'] ?? 'Subject';
-          final ca1 = (s['ca1'] as num?)?.toDouble() ?? 0.0;
-          final ca2 = (s['ca2'] as num?)?.toDouble() ?? 0.0;
-          final ca3 = (s['ca3'] as num?)?.toDouble() ?? 0.0;
+          final ca1 = (s['firstCA'] as num?)?.toDouble() ?? (s['ca1'] as num?)?.toDouble() ?? 0.0;
+          final ca2 = (s['secondCA'] as num?)?.toDouble() ?? (s['ca2'] as num?)?.toDouble() ?? 0.0;
+          final ca3 = (s['thirdCA'] as num?)?.toDouble() ?? (s['ca3'] as num?)?.toDouble() ?? 0.0;
           final totalCa = (s['totalCa'] as num?)?.toDouble() ?? (ca1 + ca2 + ca3);
           final exam = (s['exam'] as num?)?.toDouble() ?? 0.0;
           final total = (s['totalScore'] as num?)?.toDouble() ?? (s['total'] as num?)?.toDouble() ?? (totalCa + exam);
-          final grade = s['grade']?.toString() ?? 'A';
-          final remark = s['remark']?.toString() ?? 'Good';
+          final grade = s['grade']?.toString() ?? '—';
+          final remark = s['remark']?.toString() ?? '';
 
           mapped.add({
             'subject': sName,
+            'ca1': ca1,
+            'ca2': ca2,
+            'ca3': ca3,
             'ca': totalCa,
             'exam': exam,
             'total': total,
@@ -189,11 +167,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           });
         }
       }
-      if (mapped.isNotEmpty) {
-        setState(() {
-          _subjects = mapped;
-        });
-      }
+      _subjects = mapped;
     }
   }
 
@@ -257,7 +231,26 @@ class _ResultsScreenState extends State<ResultsScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
+                : !_hasResult
+                    ? RefreshIndicator(
+                        onRefresh: _fetchResults,
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(40),
+                          children: [
+                            const Icon(Icons.assignment_outlined, size: 48, color: AppColors.textSecondary),
+                            const SizedBox(height: 12),
+                            Text(
+                              _allResults.isEmpty
+                                  ? 'No results have been published for you yet. Pull down to check again.'
+                                  : 'No result for this term yet.',
+                              textAlign: TextAlign.center,
+                              style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
                     onRefresh: _fetchResults,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -322,6 +315,8 @@ class _ResultsScreenState extends State<ResultsScreen> {
                                           position: _position,
                                           totalStudents: _totalStudents,
                                           subjects: _subjects,
+                                          teacherFeedback: _teacherFeedback,
+                                          headTeacherComment: _headTeacherComment,
                                         ),
                                       ),
                                     );
@@ -453,7 +448,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _buildTermChip(String label, int term) {
     final isSelected = _selectedTerm == term;
     return GestureDetector(
-      onTap: () => setState(() => _selectedTerm = term),
+      onTap: () => _selectTerm(term),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(

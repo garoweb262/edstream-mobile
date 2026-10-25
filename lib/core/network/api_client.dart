@@ -1,21 +1,34 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:edstream_mobile/core/constants/app_constants.dart';
 import 'package:edstream_mobile/core/network/api_exception.dart';
+import 'package:edstream_mobile/core/network/connectivity_controller.dart';
+import 'package:edstream_mobile/core/network/offline_mutation_queue.dart';
+import 'package:edstream_mobile/core/network/pending_mutation.dart';
 import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 
-/// Central HTTP Client for Edstream Cloud Services
-/// Configured with base URL https://api.edstream.ng/api/v1/ and automatic bearer authorization.
+/// Central HTTP client for Edstream.
+///
+/// - Every GET is cached (per path + query) so screens keep working offline;
+///   offline answers carry `_offline: true` and `_cachedAt`.
+/// - [send] performs a write, and when the device is offline it queues the
+///   write to be replayed by OfflineSyncService, returning `{'_queued': true}`.
+/// - The server address can be changed at build time with
+///   `--dart-define=API_URL=https://.../api/v1/`.
 class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
-  static const String baseUrl = 'https://api.edstream.ng/api/v1/';
+  static const String baseUrl = String.fromEnvironment('API_URL', defaultValue: 'https://api.edstream.ng/api/v1/');
   static const Duration timeoutDuration = Duration(seconds: 15);
 
   String? _authToken;
+
+  /// App-wide messenger (set on MaterialApp) used to say a change was saved offline.
+  static final GlobalKey<ScaffoldMessengerState> messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   void setAuthToken(String? token) {
     _authToken = token;
@@ -41,181 +54,169 @@ class ApiClient {
     if (_authToken != null && _authToken!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $_authToken';
     }
-    if (customHeaders != null) {
-      headers.addAll(customHeaders);
-    }
+    if (customHeaders != null) headers.addAll(customHeaders);
     return headers;
   }
 
+  /// Lets tests point the client elsewhere (e.g. an unreachable server).
+  @visibleForTesting
+  static String? baseUrlOverride;
+
   Uri _resolveUri(String path, [Map<String, dynamic>? queryParams]) {
     final cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    final urlStr = '$baseUrl$cleanPath';
-    final uri = Uri.parse(urlStr);
+    final base = baseUrlOverride ?? baseUrl;
+    final root = base.endsWith('/') ? base : '$base/';
+    final uri = Uri.parse('$root$cleanPath');
     if (queryParams != null && queryParams.isNotEmpty) {
-      return uri.replace(
-        queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())),
-      );
+      return uri.replace(queryParameters: queryParams.map((k, v) => MapEntry(k, v.toString())));
     }
     return uri;
   }
 
-  /// GET request with optional offline cache fallback
+  /// Cache key for a GET: path plus sorted query, so different filters
+  /// never overwrite each other.
+  static String cacheKeyFor(String path, [Map<String, dynamic>? queryParams]) {
+    final clean = path.startsWith('/') ? path.substring(1) : path;
+    if (queryParams == null || queryParams.isEmpty) return 'cache_get_$clean';
+    final keys = queryParams.keys.toList()..sort();
+    return 'cache_get_$clean?${keys.map((k) => '$k=${queryParams[k]}').join('&')}';
+  }
+
+  static bool _isNetworkFailure(Object e) =>
+      e is SocketException || e is TimeoutException || e is http.ClientException || e is HandshakeException;
+
+  Future<http.Response> _request(String method, Uri uri, Map<String, String> headers, dynamic body) {
+    final encoded = body != null ? jsonEncode(body) : null;
+    switch (method) {
+      case 'GET':
+        return http.get(uri, headers: headers);
+      case 'POST':
+        return http.post(uri, headers: headers, body: encoded);
+      case 'PUT':
+        return http.put(uri, headers: headers, body: encoded);
+      case 'PATCH':
+        return http.patch(uri, headers: headers, body: encoded);
+      case 'DELETE':
+        return http.delete(uri, headers: headers, body: encoded);
+    }
+    throw ArgumentError('Unsupported method $method');
+  }
+
+  /// Sends one request and decodes it. Throws ApiException; network
+  /// failures have `isNetworkError: true`.
+  Future<dynamic> _send(
+    String method,
+    String path, {
+    dynamic body,
+    Map<String, dynamic>? queryParams,
+    Map<String, String>? headers,
+    String? cacheKey,
+  }) async {
+    await getAuthToken();
+    try {
+      final response = await _request(method, _resolveUri(path, queryParams), _buildHeaders(headers), body)
+          .timeout(timeoutDuration);
+      ConnectivityController.instance.markReachable(true);
+      return _handleResponse(response, cacheKey: cacheKey);
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      if (_isNetworkFailure(e)) {
+        ConnectivityController.instance.markReachable(false);
+        throw ApiException(
+          message: e is TimeoutException
+              ? 'The server took too long to answer. Please try again.'
+              : 'No internet connection. Please check your network.',
+          isNetworkError: true,
+        );
+      }
+      throw ApiException(message: 'Request failed: $e');
+    }
+  }
+
+  /// GET with offline fallback. Pass `cacheLocally: false` for data that
+  /// must never come from an old copy (e.g. payment verification).
   Future<dynamic> get(
     String path, {
     Map<String, dynamic>? queryParams,
     Map<String, String>? headers,
-    bool cacheLocally = false,
+    bool cacheLocally = true,
     String? cacheKey,
   }) async {
-    await getAuthToken();
-    final effectiveCacheKey = cacheKey ?? 'cache_get_$path';
-
+    final key = cacheKey ?? cacheKeyFor(path, queryParams);
     try {
-      final uri = _resolveUri(path, queryParams);
-      final response = await http
-          .get(uri, headers: _buildHeaders(headers))
-          .timeout(timeoutDuration);
-
-      return _handleResponse(response, cacheKey: cacheLocally ? effectiveCacheKey : null);
-    } on SocketException {
-      if (cacheLocally) {
-        final cachedData = LocalCacheStore.instance.getJson(effectiveCacheKey);
-        if (cachedData != null) return cachedData;
+      return await _send('GET', path, queryParams: queryParams, headers: headers, cacheKey: cacheLocally ? key : null);
+    } on ApiException catch (e) {
+      if (e.isNetworkError && cacheLocally) {
+        final cached = LocalCacheStore.instance.getJson(key);
+        if (cached != null) {
+          if (cached is Map) {
+            return {
+              ...Map<String, dynamic>.from(cached),
+              '_offline': true,
+              '_cachedAt': LocalCacheStore.instance.getCacheTime(key)?.toIso8601String(),
+            };
+          }
+          return cached;
+        }
       }
-      throw ApiException(
-        message: 'No internet connection. Please check your network.',
-        isNetworkError: true,
-      );
-    } on TimeoutException {
-      if (cacheLocally) {
-        final cachedData = LocalCacheStore.instance.getJson(effectiveCacheKey);
-        if (cachedData != null) return cachedData;
-      }
-      throw ApiException(
-        message: 'Server request timed out. Please try again.',
-        isNetworkError: true,
-      );
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw ApiException(message: 'Unexpected network error: $e');
+      rethrow;
     }
   }
 
-  /// POST request
-  Future<dynamic> post(
+  Future<dynamic> post(String path, {dynamic body, Map<String, String>? headers}) =>
+      _send('POST', path, body: body, headers: headers);
+
+  Future<dynamic> put(String path, {dynamic body, Map<String, String>? headers}) =>
+      _send('PUT', path, body: body, headers: headers);
+
+  Future<dynamic> patch(String path, {dynamic body, Map<String, String>? headers}) =>
+      _send('PATCH', path, body: body, headers: headers);
+
+  Future<dynamic> delete(String path, {Map<String, String>? headers}) => _send('DELETE', path, headers: headers);
+
+  /// Replays a queued change (used by OfflineSyncService).
+  Future<dynamic> replay(String method, String path, Map<String, dynamic>? body) => _send(method, path, body: body);
+
+  /// A write that survives being offline: sent now when possible, otherwise
+  /// saved and sent automatically later. Returns the server reply, or
+  /// `{'_queued': true}` when it was saved for later. Server rejections
+  /// (4xx/5xx) are thrown as usual.
+  Future<dynamic> send(
+    String method,
     String path, {
-    dynamic body,
-    Map<String, String>? headers,
+    Map<String, dynamic>? body,
+    required String feature,
+    required String label,
   }) async {
-    await getAuthToken();
     try {
-      final uri = _resolveUri(path);
-      final response = await http
-          .post(
-            uri,
-            headers: _buildHeaders(headers),
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(timeoutDuration);
-
-      return _handleResponse(response);
-    } on SocketException {
-      throw ApiException(
-        message: 'No internet connection. Request queued for offline sync.',
-        isNetworkError: true,
-      );
-    } on TimeoutException {
-      throw ApiException(
-        message: 'Request timed out. Please try again.',
-        isNetworkError: true,
-      );
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw ApiException(message: 'Request failed: $e');
+      return await _send(method, path, body: body);
+    } on ApiException catch (e) {
+      if (!e.isNetworkError) rethrow;
+      await OfflineMutationQueue.instance.enqueue(PendingMutation(
+        localId: OfflineMutationQueue.instance.generateLocalId(feature),
+        feature: feature,
+        operation: label,
+        method: method,
+        path: path,
+        payload: body,
+        displaySnapshot: {'label': label},
+        createdAt: DateTime.now(),
+      ));
+      _notify('You are offline. "$label" is saved on this phone and will be sent automatically.');
+      return {'_queued': true};
     }
   }
 
-  /// PUT request
-  Future<dynamic> put(
-    String path, {
-    dynamic body,
-    Map<String, String>? headers,
-  }) async {
-    await getAuthToken();
+  static void _notify(String text) {
     try {
-      final uri = _resolveUri(path);
-      final response = await http
-          .put(
-            uri,
-            headers: _buildHeaders(headers),
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(timeoutDuration);
-
-      return _handleResponse(response);
-    } on SocketException {
-      throw ApiException(
-        message: 'No internet connection. Request queued for offline sync.',
-        isNetworkError: true,
-      );
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw ApiException(message: 'Request failed: $e');
+      messengerKey.currentState?.showSnackBar(SnackBar(content: Text(text)));
+    } catch (_) {
+      // No UI (e.g. background or tests): nothing to show.
     }
   }
 
-  /// PATCH request
-  Future<dynamic> patch(
-    String path, {
-    dynamic body,
-    Map<String, String>? headers,
-  }) async {
-    await getAuthToken();
-    try {
-      final uri = _resolveUri(path);
-      final response = await http
-          .patch(
-            uri,
-            headers: _buildHeaders(headers),
-            body: body != null ? jsonEncode(body) : null,
-          )
-          .timeout(timeoutDuration);
-
-      return _handleResponse(response);
-    } on SocketException {
-      throw ApiException(
-        message: 'No internet connection.',
-        isNetworkError: true,
-      );
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw ApiException(message: 'Request failed: $e');
-    }
-  }
-
-  /// DELETE request
-  Future<dynamic> delete(
-    String path, {
-    Map<String, String>? headers,
-  }) async {
-    await getAuthToken();
-    try {
-      final uri = _resolveUri(path);
-      final response = await http
-          .delete(uri, headers: _buildHeaders(headers))
-          .timeout(timeoutDuration);
-
-      return _handleResponse(response);
-    } on SocketException {
-      throw ApiException(
-        message: 'No internet connection.',
-        isNetworkError: true,
-      );
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      throw ApiException(message: 'Delete failed: $e');
-    }
-  }
+  static bool isQueued(dynamic result) => result is Map && result['_queued'] == true;
+  static bool isOffline(dynamic result) => result is Map && result['_offline'] == true;
 
   dynamic _handleResponse(http.Response response, {String? cacheKey}) {
     dynamic decoded;
@@ -238,11 +239,6 @@ class ApiClient {
     if (decoded is Map && decoded['message'] != null) {
       errorMessage = decoded['message'].toString();
     }
-
-    throw ApiException(
-      message: errorMessage,
-      statusCode: response.statusCode,
-      data: decoded,
-    );
+    throw ApiException(message: errorMessage, statusCode: response.statusCode, data: decoded);
   }
 }

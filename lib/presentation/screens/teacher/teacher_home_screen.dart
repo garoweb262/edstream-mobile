@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:edstream_mobile/core/constants/app_constants.dart';
 import 'package:edstream_mobile/core/network/api_client.dart';
+import 'package:edstream_mobile/core/network/session.dart';
 import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
@@ -106,9 +107,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
     );
 
     if (confirm == true) {
-      ApiClient.instance.setAuthToken(null);
-      await LocalCacheStore.instance.remove(AppConstants.tokenKey);
-      await LocalCacheStore.instance.remove(AppConstants.roleKey);
+      await signOut();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -329,7 +328,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
           const SizedBox(height: 20),
 
           // Gender Demographics Widget (Screen T1 requirement)
-          _buildGenderDemographicsCard(),
+          if (_totalStudents > 0) _buildGenderDemographicsCard(),
           const SizedBox(height: 24),
 
           // Quick Operations Title
@@ -426,7 +425,7 @@ class _TeacherHomeScreenState extends State<TeacherHomeScreen> {
   }
 
   Widget _buildGenderDemographicsCard() {
-    final malePct = _totalStudents > 0 ? (_maleCount / _totalStudents * 100).toInt() : 57;
+    final malePct = (_maleCount / _totalStudents * 100).round().clamp(1, 99);
     final femalePct = 100 - malePct;
 
     return Container(

@@ -6,6 +6,7 @@ import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
 import 'package:edstream_mobile/presentation/widgets/custom_text_field.dart';
+import 'package:edstream_mobile/presentation/widgets/credentials_dialog.dart';
 import 'package:edstream_mobile/presentation/widgets/primary_button.dart';
 
 class StaffDirectoryScreen extends StatefulWidget {
@@ -96,92 +97,8 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
   }
 
   void _loadDefaultMockStaff() {
-    _staffList = [
-      {
-        'staffId': 'STF-001',
-        'firstName': 'Dr. Idi',
-        'surname': 'Sule',
-        'otherName': '',
-        'email': 'sulefango1@gmail.com',
-        'phoneNumber': '+234 803 123 4567',
-        'gender': 'Male',
-        'staffType': 'Teacher',
-        'status': 'active',
-        'department': 'Mathematics & Sciences',
-      },
-      {
-        'staffId': 'STF-002',
-        'firstName': 'Maryam',
-        'surname': 'Bello',
-        'otherName': 'Amina',
-        'email': 'm.bello@edstream.edu',
-        'phoneNumber': '+234 802 987 6543',
-        'gender': 'Female',
-        'staffType': 'Principal',
-        'status': 'active',
-        'department': 'Administration',
-      },
-      {
-        'staffId': 'STF-003',
-        'firstName': 'Alhaji Ibrahim',
-        'surname': 'Danjuma',
-        'otherName': '',
-        'email': 'i.danjuma@edstream.edu',
-        'phoneNumber': '+234 809 111 2233',
-        'gender': 'Male',
-        'staffType': 'Director',
-        'status': 'active',
-        'department': 'Board of Trustees',
-      },
-      {
-        'staffId': 'STF-004',
-        'firstName': 'Chidi',
-        'surname': 'Okonkwo',
-        'otherName': 'Peter',
-        'email': 'c.okonkwo@edstream.edu',
-        'phoneNumber': '+234 814 555 6677',
-        'gender': 'Male',
-        'staffType': 'Exam Officer',
-        'status': 'active',
-        'department': 'Academic Examinations',
-      },
-      {
-        'staffId': 'STF-005',
-        'firstName': 'Fatima',
-        'surname': 'Garba',
-        'otherName': '',
-        'email': 'f.garba@edstream.edu',
-        'phoneNumber': '+234 805 444 3322',
-        'gender': 'Female',
-        'staffType': 'Finance Officer',
-        'status': 'active',
-        'department': 'Bursary & Accounts',
-      },
-      {
-        'staffId': 'STF-006',
-        'firstName': 'Grace',
-        'surname': 'Adeyemi',
-        'otherName': 'Funke',
-        'email': 'g.adeyemi@edstream.edu',
-        'phoneNumber': '+234 803 777 8899',
-        'gender': 'Female',
-        'staffType': 'Teacher',
-        'status': 'active',
-        'department': 'English & Literature',
-      },
-      {
-        'staffId': 'STF-007',
-        'firstName': 'Kabir',
-        'surname': 'Mustapha',
-        'otherName': '',
-        'email': 'k.mustapha@edstream.edu',
-        'phoneNumber': '+234 816 222 3344',
-        'gender': 'Male',
-        'staffType': 'Teacher',
-        'status': 'inactive',
-        'department': 'Social Sciences',
-      },
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _staffList = [];
   }
 
   List<Map<String, dynamic>> get _filteredStaff {
@@ -209,6 +126,7 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
     final surnameController = TextEditingController();
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
+    final staffIdController = TextEditingController();
 
     String staffType = 'teacher';
     String gender = 'Male';
@@ -258,6 +176,8 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
                 CustomTextField(labelText: 'Work Email Address', hintText: 'e.g. staff@edstream.org', controller: emailController),
                 const SizedBox(height: 12),
                 CustomTextField(labelText: 'Phone Number', hintText: 'e.g. 08012345678', controller: phoneController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Staff ID', hintText: 'e.g. STF/001', controller: staffIdController),
                 const SizedBox(height: 14),
 
                 Text('Institutional Role', style: AppTypography.labelMedium),
@@ -275,7 +195,7 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
                     items: const [
                       DropdownMenuItem(value: 'teacher', child: Text('Teacher / Form Master')),
                       DropdownMenuItem(value: 'principal', child: Text('Principal')),
-                      DropdownMenuItem(value: 'director', child: Text('School Director')),
+                      DropdownMenuItem(value: 'admin-officer', child: Text('Admin Officer')),
                       DropdownMenuItem(value: 'exam-officer', child: Text('Examination Officer')),
                       DropdownMenuItem(value: 'finance-officer', child: Text('Finance / Bursar')),
                       DropdownMenuItem(value: 'non-academic', child: Text('Administrative Support')),
@@ -310,9 +230,13 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
                   text: 'Enroll Staff Member',
                   isLoading: isSaving,
                   onPressed: () async {
-                    if (fNameController.text.trim().isEmpty || surnameController.text.trim().isEmpty || emailController.text.trim().isEmpty) {
+                    if (fNameController.text.trim().isEmpty ||
+                        surnameController.text.trim().isEmpty ||
+                        emailController.text.trim().isEmpty ||
+                        phoneController.text.trim().isEmpty ||
+                        staffIdController.text.trim().isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please complete required name and email fields.')),
+                        const SnackBar(content: Text('Please fill name, email, phone and staff ID.')),
                       );
                       return;
                     }
@@ -325,19 +249,19 @@ class _StaffDirectoryScreenState extends State<StaffDirectoryScreen> {
                       'phoneNumber': phoneController.text.trim(),
                       'staffType': staffType,
                       'gender': gender,
+                      'staffId': staffIdController.text.trim(),
                     };
 
                     try {
-                      await ApiClient.instance.post('staff/create', body: payload);
+                      final result = await ApiClient.instance.send('POST', 'staff/create',
+                          body: payload, feature: 'staff', label: 'Add ${payload['firstName']} ${payload['surname']}');
                       if (ctx.mounted) Navigator.pop(ctx);
-                      _fetchStaffMembers();
+                      if (!ApiClient.isQueued(result)) _fetchStaffMembers();
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Staff member registered successfully!'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
+                        await showCreateResult(context, result,
+                            name: '${payload['firstName']} ${payload['surname']}',
+                            login: payload['email'] as String,
+                            successText: 'Staff member registered successfully!');
                       }
                     } catch (e) {
                       setModalState(() => isSaving = false);

@@ -68,40 +68,9 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen>
         _applyData(list);
       }
     } catch (_) {
-      // Seed rich default notifications if network empty
+      // Nothing cached and no connection: show the empty state.
       if (_allNotifications.isEmpty) {
-        final mockList = [
-          {
-            '_id': 'notif-1',
-            'title': 'Continuous Assessment Score Submissions Due',
-            'message': 'All subject instructors are reminded that the 3rd Term Continuous Assessment (CA) grading portal will close on Friday by 6:00 PM.',
-            'audience': 'school-to-teachers',
-            'sender': 'Academic Affairs Office',
-            'isRead': false,
-            'isMention': false,
-            'createdAt': '2026-10-10T18:30:00Z',
-          },
-          {
-            '_id': 'notif-2',
-            'title': 'Inter-House Sports Gala Briefing',
-            'message': 'Attention Form Masters: Please ensure class team leaders submit the relay and football rosters before Wednesday noon.',
-            'audience': 'teacher-to-students',
-            'sender': 'Sports Department',
-            'isRead': false,
-            'isMention': true,
-            'createdAt': '2026-10-09T11:15:00Z',
-          },
-          {
-            '_id': 'notif-3',
-            'title': 'Independence Anniversary Holiday Notice',
-            'message': 'The school administration wishes all staff and students a peaceful public holiday. Normal academic lectures resume on Monday.',
-            'audience': 'school-to-both',
-            'sender': 'Principal Office',
-            'isRead': true,
-            'isMention': false,
-            'createdAt': '2026-10-01T08:00:00Z',
-          },
-        ];
+        final mockList = <Map<String, dynamic>>[];
         _applyData(mockList);
       }
     }
@@ -280,7 +249,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen>
                       };
 
                       try {
-                        await ApiClient.instance.post('notification', body: payload);
+                        await ApiClient.instance.send('POST', 'notification', feature: 'notifications', label: 'notifications update', body: payload);
                       } catch (_) {}
 
                       // Local optimistic insertion

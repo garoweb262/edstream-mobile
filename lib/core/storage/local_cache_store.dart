@@ -76,6 +76,14 @@ class LocalCacheStore {
     return _requirePrefs.remove(key);
   }
 
+  /// Removes every stored key except those [keep] says to keep.
+  Future<void> removeAllExcept(bool Function(String key) keep) async {
+    await init();
+    for (final key in _requirePrefs.getKeys().toList()) {
+      if (!keep(key)) await _requirePrefs.remove(key);
+    }
+  }
+
   Future<bool> clearAll() async {
     await init();
     return _requirePrefs.clear();

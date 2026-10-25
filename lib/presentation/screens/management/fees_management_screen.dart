@@ -120,83 +120,13 @@ class _FeesManagementScreenState extends State<FeesManagementScreen> with Single
   }
 
   void _loadDefaultMockSchedules() {
-    _feeSchedules = [
-      {
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'Senior Secondary',
-        'amount': 85000,
-        'lateFees': 5000,
-        'openDate': '2026-04-15',
-        'closeDate': '2026-06-30',
-        'status': 'active',
-      },
-      {
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'Junior Secondary',
-        'amount': 72000,
-        'lateFees': 5000,
-        'openDate': '2026-04-15',
-        'closeDate': '2026-06-30',
-        'status': 'active',
-      },
-      {
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'Primary School',
-        'amount': 55000,
-        'lateFees': 3000,
-        'openDate': '2026-04-15',
-        'closeDate': '2026-06-30',
-        'status': 'active',
-      },
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _feeSchedules = [];
   }
 
   void _loadDefaultMockTransactions() {
-    _transactions = [
-      {
-        'reference': 'EDS-PAY-88231',
-        'studentName': 'Alex Johnson Chukwuma',
-        'regNo': 'EDS/2026/0491',
-        'amount': 85000,
-        'status': 'successful',
-        'date': '2026-10-09 11:22 AM',
-      },
-      {
-        'reference': 'EDS-PAY-88219',
-        'studentName': 'Zainab Ahmed Al-Hassan',
-        'regNo': 'EDS/2026/0412',
-        'amount': 85000,
-        'status': 'successful',
-        'date': '2026-10-08 04:45 PM',
-      },
-      {
-        'reference': 'EDS-PAY-88204',
-        'studentName': 'David Adeleke',
-        'regNo': 'EDS/2026/0455',
-        'amount': 90000,
-        'status': 'successful',
-        'date': '2026-10-07 09:12 AM',
-      },
-      {
-        'reference': 'EDS-PAY-88188',
-        'studentName': 'Fatima Umar Sadiq',
-        'regNo': 'EDS/2026/0438',
-        'amount': 85000,
-        'status': 'pending',
-        'date': '2026-10-06 01:30 PM',
-      },
-      {
-        'reference': 'EDS-PAY-88152',
-        'studentName': 'Emmanuel Kalu Nnadi',
-        'regNo': 'EDS/2026/0488',
-        'amount': 72000,
-        'status': 'failed',
-        'date': '2026-10-05 08:05 AM',
-      },
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _transactions = [];
   }
 
   void _showVerifyPaymentModal() {
@@ -268,16 +198,25 @@ class _FeesManagementScreenState extends State<FeesManagementScreen> with Single
                       }
 
                       setModalState(() => isVerifying = true);
+                      // Always asks the server (never a saved copy) and reports exactly what it says.
+                      String message;
+                      bool ok = false;
                       try {
-                        await ApiClient.instance.post('payment/verify-school-fees', body: {'reference': ref});
-                      } catch (_) {}
+                        final res = await ApiClient.instance.get('payment/verify-paystack-payment',
+                            queryParams: {'reference': ref}, cacheLocally: false);
+                        ok = res is Map && res['success'] == true;
+                        message = res is Map && res['message'] != null ? res['message'].toString() : 'Payment verified.';
+                      } catch (e) {
+                        message = 'Could not verify $ref: $e';
+                      }
 
                       if (modalCtx.mounted) Navigator.pop(modalCtx);
+                      if (ok) _fetchFeesData();
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            backgroundColor: AppColors.success,
-                            content: Text('Reference $ref verified: Payment Successful!'),
+                            backgroundColor: ok ? AppColors.success : AppColors.danger,
+                            content: Text(message),
                           ),
                         );
                       }
@@ -292,12 +231,54 @@ class _FeesManagementScreenState extends State<FeesManagementScreen> with Single
     );
   }
 
-  void _showAddFeeScheduleModal() {
+  // id/label lists for a dropdown, from a cached list endpoint.
+  Future<List<Map<String, String>>> _options(String path, String listKey, String labelKey) async {
+    try {
+      final res = await ApiClient.instance.get(path, queryParams: {'limit': 100});
+      final list = res is Map ? (res[listKey] ?? res['data']) : res;
+      if (list is! List) return [];
+      return list
+          .whereType<Map>()
+          .map((m) => {
+                'id': m['_id']?.toString() ?? '',
+                'label': [m[labelKey], if (labelKey == 'term') m['session']].where((v) => v != null).join(' · '),
+                'session': m['session']?.toString() ?? '',
+              })
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  void _showAddFeeScheduleModal() async {
+    final sessions = await _options('session', 'sessions', 'session');
+    final terms = await _options('term', 'terms', 'term');
+    final sections = await _options('section', 'sections', 'name');
+    if (!mounted) return;
     final amountController = TextEditingController();
-    final lateFeeController = TextEditingController(text: '5000');
-    final termController = TextEditingController(text: '3rd Term');
-    final sessionController = TextEditingController(text: '2024/2025');
+    final lateFeeController = TextEditingController(text: '0');
+    String? sessionId = sessions.isNotEmpty ? sessions.first['id'] : null;
+    String? termId;
+    String? sectionId;
+    DateTime openDate = DateTime.now();
+    DateTime closeDate = DateTime.now().add(const Duration(days: 90));
     bool isSaving = false;
+
+    Widget picker(String label, String? value, List<Map<String, String>> items, ValueChanged<String?> onChanged) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: AppTypography.labelMedium),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<String>(
+              initialValue: value,
+              isExpanded: true,
+              hint: Text(items.isEmpty ? 'None available (connect to load)' : 'Select'),
+              items: items.map((o) => DropdownMenuItem(value: o['id'], child: Text(o['label'] ?? ''))).toList(),
+              onChanged: onChanged,
+            ),
+            const SizedBox(height: 12),
+          ],
+        );
 
     showModalBottomSheet(
       context: context,
@@ -340,9 +321,42 @@ class _FeesManagementScreenState extends State<FeesManagementScreen> with Single
                 const SizedBox(height: 12),
                 CustomTextField(labelText: 'Late Payment Fine (₦)', hintText: 'e.g. 5000', controller: lateFeeController),
                 const SizedBox(height: 12),
-                CustomTextField(labelText: 'Academic Term', hintText: 'e.g. 1st Term, 3rd Term', controller: termController),
-                const SizedBox(height: 12),
-                CustomTextField(labelText: 'Academic Session', hintText: 'e.g. 2024/2025', controller: sessionController),
+                picker('Session', sessionId, sessions, (v) => setModalState(() {
+                      sessionId = v;
+                      termId = null;
+                    })),
+                picker(
+                    'Term',
+                    termId,
+                    terms.where((t) {
+                      final sessionName = sessions.where((x) => x['id'] == sessionId).map((x) => x['label']).firstOrNull;
+                      return sessionName == null || t['session'] == sessionName || t['session'] == sessionId;
+                    }).toList(),
+                    (v) => setModalState(() => termId = v)),
+                picker('Section', sectionId, sections, (v) => setModalState(() => sectionId = v)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final d = await showDatePicker(context: modalCtx, initialDate: openDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                          if (d != null) setModalState(() => openDate = d);
+                        },
+                        child: Text('Opens ${openDate.toIso8601String().substring(0, 10)}'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final d = await showDatePicker(context: modalCtx, initialDate: closeDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                          if (d != null) setModalState(() => closeDate = d);
+                        },
+                        child: Text('Due ${closeDate.toIso8601String().substring(0, 10)}'),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
 
                 PrimaryButton(
@@ -357,24 +371,34 @@ class _FeesManagementScreenState extends State<FeesManagementScreen> with Single
                       return;
                     }
 
+                    if (sessionId == null || termId == null || sectionId == null || !closeDate.isAfter(openDate)) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('Choose session, term and section, with a due date after the open date.')),
+                      );
+                      return;
+                    }
                     setModalState(() => isSaving = true);
-                    final payload = {
+                    final payload = <String, dynamic>{
                       'amount': amt,
-                      'lateFees': double.tryParse(lateFeeController.text.trim()) ?? 5000.0,
-                      'term': termController.text.trim(),
-                      'session': sessionController.text.trim(),
-                      'openDate': DateTime.now().toIso8601String(),
-                      'closeDate': DateTime.now().add(const Duration(days: 90)).toIso8601String(),
+                      'lateFees': double.tryParse(lateFeeController.text.trim()) ?? 0,
+                      'term': termId,
+                      'session': sessionId,
+                      'section': sectionId,
+                      'openDate': openDate.toIso8601String(),
+                      'closeDate': closeDate.toIso8601String(),
                     };
 
                     try {
-                      await ApiClient.instance.post('schoolfees/create', body: payload);
+                      final result = await ApiClient.instance.send('POST', 'schoolfees/create',
+                          body: payload, feature: 'fees', label: 'New fee schedule');
                       if (ctx.mounted) Navigator.pop(ctx);
-                      _fetchFeesData();
+                      if (!ApiClient.isQueued(result)) _fetchFeesData();
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Fee schedule published successfully!'),
+                          SnackBar(
+                            content: Text(ApiClient.isQueued(result)
+                                ? 'Saved on this phone; it will be published when you are back online.'
+                                : 'Fee schedule published successfully!'),
                             backgroundColor: AppColors.success,
                           ),
                         );

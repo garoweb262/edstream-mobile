@@ -75,28 +75,8 @@ class _BranchesManagementScreenState extends State<BranchesManagementScreen> {
   }
 
   void _loadMockBranches() {
-    _branches = [
-      {
-        '_id': 'b-1',
-        'branchName': 'Central Campus',
-        'branchCode': 'MAIN',
-        'address': 'Plot 402 Airport Road, Kano State',
-        'isMainBranch': true,
-        'status': 'active',
-        'studentCount': 620,
-        'staffCount': 42,
-      },
-      {
-        '_id': 'b-2',
-        'branchName': 'Annex Campus',
-        'branchCode': 'ANX',
-        'address': 'Bompai Industrial Area, Kano State',
-        'isMainBranch': false,
-        'status': 'active',
-        'studentCount': 280,
-        'staffCount': 18,
-      },
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _branches = [];
   }
 
   void _showAddBranchModal() {
@@ -166,7 +146,7 @@ class _BranchesManagementScreenState extends State<BranchesManagementScreen> {
                   if (nameController.text.trim().isEmpty) return;
                   setModalState(() => isSaving = true);
                   try {
-                    await ApiClient.instance.post('branches', body: {
+                    await ApiClient.instance.send('POST', 'branches', feature: 'branches', label: 'branches update', body: {
                       'branchName': nameController.text.trim(),
                       'address': addressController.text.trim(),
                       'phoneNumber': phoneController.text.trim(),

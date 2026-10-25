@@ -92,23 +92,10 @@ class _AcademicStructureScreenState extends State<AcademicStructureScreen> with 
   }
 
   void _loadMockData() {
-    _classes = [
-      {'_id': 'c1', 'code': 'Basic 1', 'subclass': 'A', 'status': 'active'},
-      {'_id': 'c2', 'code': 'Basic 2', 'subclass': 'B', 'status': 'active'},
-      {'_id': 'c3', 'code': 'JSS 1', 'subclass': 'A', 'status': 'active'},
-      {'_id': 'c4', 'code': 'SSS 1', 'subclass': 'Science', 'status': 'active'},
-    ];
-    _sections = [
-      {'_id': 's1', 'name': 'Primary', 'status': 'active'},
-      {'_id': 's2', 'name': 'Junior Secondary', 'status': 'active'},
-      {'_id': 's3', 'name': 'Senior Secondary', 'status': 'active'},
-    ];
-    _subjects = [
-      {'_id': 'sub1', 'subjectName': 'Mathematics', 'subjectCode': 'MTH', 'optional': false},
-      {'_id': 'sub2', 'subjectName': 'English Language', 'subjectCode': 'ENG', 'optional': false},
-      {'_id': 'sub3', 'subjectName': 'Physics', 'subjectCode': 'PHY', 'optional': true},
-      {'_id': 'sub4', 'subjectName': 'Chemistry', 'subjectCode': 'CHM', 'optional': true},
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _classes = [];
+    _sections = [];
+    _subjects = [];
   }
 
   void _showAddClassModal() {
@@ -180,13 +167,16 @@ class _AcademicStructureScreenState extends State<AcademicStructureScreen> with 
                 text: 'Save Class Arm',
                 isLoading: isSaving,
                 onPressed: () async {
-                  if (codeController.text.trim().isEmpty) return;
+                  if (codeController.text.trim().isEmpty || selectedSectionId == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Enter the class code and choose a section.')));
+                    return;
+                  }
                   setModalState(() => isSaving = true);
                   try {
-                    await ApiClient.instance.post('class', body: {
+                    await ApiClient.instance.send('POST', 'class', feature: 'academics', label: 'New class ${codeController.text.trim()}', body: {
                       'code': codeController.text.trim(),
                       'subclass': armController.text.trim(),
-                      'section': selectedSectionId,
+                      'sectionId': selectedSectionId,
                     });
                     if (ctx.mounted) Navigator.pop(ctx);
                     _loadAcademicData();
@@ -251,7 +241,7 @@ class _AcademicStructureScreenState extends State<AcademicStructureScreen> with 
                   if (nameController.text.trim().isEmpty) return;
                   setModalState(() => isSaving = true);
                   try {
-                    await ApiClient.instance.post('section/create', body: {
+                    await ApiClient.instance.send('POST', 'section/create', feature: 'academics', label: 'academics update', body: {
                       'name': nameController.text.trim(),
                     });
                     if (ctx.mounted) Navigator.pop(ctx);
@@ -276,6 +266,7 @@ class _AcademicStructureScreenState extends State<AcademicStructureScreen> with 
     final codeController = TextEditingController();
     bool optional = false;
     bool isSaving = false;
+    String? subjectSection = _sections.isNotEmpty ? _sections.first['name']?.toString() : null;
 
     showModalBottomSheet(
       context: context,
@@ -314,6 +305,18 @@ class _AcademicStructureScreenState extends State<AcademicStructureScreen> with 
               const SizedBox(height: 12),
               CustomTextField(labelText: 'Subject Code', hintText: 'e.g. MTH', controller: codeController),
               const SizedBox(height: 12),
+              Text('Section', style: AppTypography.labelMedium),
+              const SizedBox(height: 6),
+              DropdownButton<String>(
+                isExpanded: true,
+                value: subjectSection,
+                hint: const Text('Choose section'),
+                items: _sections
+                    .map((sec) => DropdownMenuItem<String>(value: sec['name']?.toString(), child: Text(sec['name']?.toString() ?? 'Section')))
+                    .toList(),
+                onChanged: (val) => setModalState(() => subjectSection = val),
+              ),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -330,10 +333,14 @@ class _AcademicStructureScreenState extends State<AcademicStructureScreen> with 
                 text: 'Save Subject',
                 isLoading: isSaving,
                 onPressed: () async {
-                  if (nameController.text.trim().isEmpty) return;
+                  if (nameController.text.trim().isEmpty || subjectSection == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Enter the subject name and choose a section.')));
+                    return;
+                  }
                   setModalState(() => isSaving = true);
                   try {
-                    await ApiClient.instance.post('subject', body: {
+                    await ApiClient.instance.send('POST', 'subject', feature: 'academics', label: 'New subject ${nameController.text.trim()}', body: {
+                      'section': subjectSection,
                       'subjectName': nameController.text.trim(),
                       'subjectCode': codeController.text.trim(),
                       'optional': optional,

@@ -29,8 +29,9 @@ class SyncStatusBanner extends StatelessWidget {
         final isOffline = ConnectivityController.instance.isOffline;
         final isSyncing = OfflineSyncService.instance.isSyncing;
         final pendingCount = OfflineMutationQueue.instance.count(feature: feature);
+        final failedCount = OfflineMutationQueue.instance.failedCount();
 
-        if (!isOffline && !isSyncing && pendingCount == 0) {
+        if (!isOffline && !isSyncing && pendingCount == 0 && failedCount == 0) {
           return const SizedBox.shrink();
         }
 
@@ -59,6 +60,12 @@ class SyncStatusBanner extends StatelessWidget {
               ? ' · $pendingCount $itemNoun${pendingCount == 1 ? '' : 's'} pending'
               : '';
           text = 'Offline Mode — showing cached records$countText';
+        } else if (pendingCount == 0 && failedCount > 0) {
+          bgColor = const Color(0xFFFEF2F2);
+          fgColor = const Color(0xFFDC2626);
+          icon = const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFDC2626));
+          final first = OfflineMutationQueue.instance.getAll().firstWhere((m) => m.isFailed);
+          text = '$failedCount saved change${failedCount == 1 ? '' : 's'} could not be sent: ${first.errorMessage}';
         } else {
           bgColor = const Color(0xFFF0FDF4); // Light Green
           fgColor = const Color(0xFF16A34A);
@@ -89,6 +96,14 @@ class SyncStatusBanner extends StatelessWidget {
                   ),
                 ),
               ),
+              if (!isSyncing && pendingCount == 0 && failedCount > 0) ...[
+                _chip('Retry', fgColor, () async {
+                  await OfflineMutationQueue.instance.retryFailed();
+                  OfflineSyncService.instance.flushPendingMutations();
+                }),
+                const SizedBox(width: 6),
+                _chip('Discard', Colors.grey.shade600, () => OfflineMutationQueue.instance.discardFailed()),
+              ],
               if (!isOffline && !isSyncing && pendingCount > 0)
                 GestureDetector(
                   onTap: () => OfflineSyncService.instance.flushPendingMutations(),
@@ -113,4 +128,13 @@ class SyncStatusBanner extends StatelessWidget {
       },
     );
   }
+
+  Widget _chip(String label, Color color, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+          child: Text(label, style: AppTypography.labelSmall.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+        ),
+      );
 }

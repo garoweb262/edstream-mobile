@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:edstream_mobile/core/constants/app_constants.dart';
 import 'package:edstream_mobile/core/network/api_client.dart';
 import 'package:edstream_mobile/core/network/api_exception.dart';
-import 'package:edstream_mobile/core/network/offline_mutation_queue.dart';
-import 'package:edstream_mobile/core/network/pending_mutation.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/presentation/screens/auth/password_success_screen.dart';
@@ -79,26 +77,9 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
       setState(() => _isLoading = false);
 
       if (e.isNetworkError) {
-        // Queue mutation offline!
-        final mutation = PendingMutation(
-          localId: OfflineMutationQueue.instance.generateLocalId('password'),
-          feature: 'profile',
-          operation: 'updatePassword',
-          method: 'PUT',
-          path: endpoint,
-          payload: payload,
-          displaySnapshot: {'updated': true},
-          createdAt: DateTime.now(),
-        );
-        await OfflineMutationQueue.instance.enqueue(mutation);
-
-        if (!mounted) return;
+        // A password change must reach the server straight away, never queued.
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Offline mode: Password update queued to sync.')),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const PasswordSuccessScreen()),
+          const SnackBar(content: Text('You are offline. Connect to the internet to change your password.')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

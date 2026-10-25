@@ -90,7 +90,7 @@ class _SchoolSettingsScreenState extends State<SchoolSettingsScreen> {
     };
 
     try {
-      await ApiClient.instance.post('school-settings/', body: payload);
+      await ApiClient.instance.send('POST', 'school-settings/', feature: 'settings', label: 'settings update', body: payload);
       await LocalCacheStore.instance.setInt('school_settings_noOfCa', _noOfCa);
       if (mounted) {
         setState(() => _isSaving = false);

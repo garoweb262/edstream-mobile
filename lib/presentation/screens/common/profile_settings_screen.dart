@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:edstream_mobile/core/constants/app_constants.dart';
 import 'package:edstream_mobile/core/network/api_client.dart';
+import 'package:edstream_mobile/core/network/session.dart';
 import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 import 'package:edstream_mobile/core/theme/app_colors.dart';
 import 'package:edstream_mobile/core/theme/app_typography.dart';
@@ -195,9 +196,7 @@ class _ProfileSettingsScreenState extends State<ProfileSettingsScreen> {
     );
 
     if (confirm == true) {
-      ApiClient.instance.setAuthToken(null);
-      await LocalCacheStore.instance.remove(AppConstants.tokenKey);
-      await LocalCacheStore.instance.remove(AppConstants.roleKey);
+      await signOut();
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,

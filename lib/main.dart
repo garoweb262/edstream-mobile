@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:edstream_mobile/core/network/api_client.dart';
+import 'package:edstream_mobile/core/network/connectivity_controller.dart';
+import 'package:edstream_mobile/core/network/offline_mutation_queue.dart';
 import 'package:edstream_mobile/core/storage/local_cache_store.dart';
 import 'package:edstream_mobile/core/theme/app_theme.dart';
 import 'package:edstream_mobile/presentation/screens/splash/splash_screen.dart';
@@ -9,6 +12,9 @@ void main() async {
 
   // Initialize storage
   await LocalCacheStore.instance.init();
+  await OfflineMutationQueue.instance.init();
+  // Watches the connection and sends changes saved while offline.
+  ConnectivityController.instance.start();
 
   // Set system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(
@@ -30,6 +36,7 @@ class EdstreamApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Edstream Mobile',
+      scaffoldMessengerKey: ApiClient.messengerKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: const SplashScreen(),

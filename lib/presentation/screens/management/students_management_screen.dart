@@ -6,6 +6,7 @@ import 'package:edstream_mobile/core/theme/app_typography.dart';
 import 'package:edstream_mobile/core/widgets/sync_status_banner.dart';
 import 'package:edstream_mobile/presentation/screens/teacher/student_details_screen.dart';
 import 'package:edstream_mobile/presentation/widgets/custom_text_field.dart';
+import 'package:edstream_mobile/presentation/widgets/credentials_dialog.dart';
 import 'package:edstream_mobile/presentation/widgets/primary_button.dart';
 
 class StudentsManagementScreen extends StatefulWidget {
@@ -110,47 +111,8 @@ class _StudentsManagementScreenState extends State<StudentsManagementScreen> {
   }
 
   void _loadDefaultMockStudents() {
-    _students = [
-      {
-        '_id': 'std-101',
-        'name': 'Alex Johnson Chukwuma',
-        'firstName': 'Alex',
-        'lastName': 'Johnson',
-        'registrationNumber': 'EDS/2026/0491',
-        'gender': 'Male',
-        'status': 'active',
-        'class': 'JSS 3A',
-        'enrollments': [{'branch': 'Main Branch', 'session': '2024/2025'}],
-        'hasDoubleEnrollment': false,
-      },
-      {
-        '_id': 'std-102',
-        'name': 'Fatima Al-Hassan',
-        'firstName': 'Fatima',
-        'lastName': 'Al-Hassan',
-        'registrationNumber': 'EDS/2026/0492',
-        'gender': 'Female',
-        'status': 'active',
-        'class': 'JSS 3A',
-        'enrollments': [
-          {'branch': 'Main Branch', 'session': '2024/2025'},
-          {'branch': 'Annex Campus', 'session': '2024/2025'}
-        ],
-        'hasDoubleEnrollment': true,
-      },
-      {
-        '_id': 'std-103',
-        'name': 'David Emeka Okafor',
-        'firstName': 'David',
-        'lastName': 'Okafor',
-        'registrationNumber': 'EDS/2026/0493',
-        'gender': 'Male',
-        'status': 'inactive',
-        'class': 'SSS 1B',
-        'enrollments': [{'branch': 'Main Branch', 'session': '2024/2025'}],
-        'hasDoubleEnrollment': false,
-      },
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _students = [];
     _applyFilters();
   }
 
@@ -179,8 +141,14 @@ class _StudentsManagementScreenState extends State<StudentsManagementScreen> {
     final id = student['_id'];
 
     try {
-      await ApiClient.instance.patch('student/toggle-status/$id');
+      final result = await ApiClient.instance.send('PATCH', 'student/deactivate/$id?status=$newStatus',
+          feature: 'students', label: 'Set ${student['name']} $newStatus');
       if (mounted) {
+        if (ApiClient.isQueued(result)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Saved on this phone; it will be sent when you are back online.')),
+          );
+        }
         setState(() {
           student['status'] = newStatus;
           _applyFilters();
@@ -201,17 +169,50 @@ class _StudentsManagementScreenState extends State<StudentsManagementScreen> {
     }
   }
 
-  void _showAddStudentModal() {
+  // Classes (with their section) for the enrol form; cached for offline use.
+  Future<List<Map<String, dynamic>>> _loadClassOptions() async {
+    try {
+      final res = await ApiClient.instance.get('class', queryParams: {'limit': 200});
+      final groups = res is Map ? res['data'] : null;
+      final out = <Map<String, dynamic>>[];
+      if (groups is List) {
+        for (final g in groups) {
+          for (final c in (g is Map ? g['classes'] as List? ?? [] : [])) {
+            if (c is Map) {
+              final section = c['section'];
+              out.add({
+                'id': c['_id']?.toString(),
+                'label': '${c['code'] ?? ''} ${c['subclass'] ?? ''}'.trim(),
+                'sectionId': section is Map ? section['_id']?.toString() : section?.toString(),
+              });
+            }
+          }
+        }
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  void _showAddStudentModal() async {
+    final classOptions = await _loadClassOptions();
+    if (!mounted) return;
     final fNameController = TextEditingController();
     final mNameController = TextEditingController();
     final lNameController = TextEditingController();
-    final regController = TextEditingController(
-      text: 'EDS/${DateTime.now().year}/${(1000 + _students.length + 1)}',
-    );
+    final regController = TextEditingController();
+    final emailController = TextEditingController();
+    final addressController = TextEditingController();
+    final cityController = TextEditingController();
+    final stateController = TextEditingController();
     final nokNameController = TextEditingController();
     final nokPhoneController = TextEditingController();
+    final nokEmailController = TextEditingController();
+    final nokRelationController = TextEditingController(text: 'Parent');
 
-    String gender = 'Male';
+    String gender = 'male';
+    String? classId;
     bool isSaving = false;
 
     showModalBottomSheet(
@@ -248,87 +249,111 @@ class _StudentsManagementScreenState extends State<StudentsManagementScreen> {
                 const SizedBox(height: 16),
                 Text('Enroll New Student', style: AppTypography.titleLarge),
                 const SizedBox(height: 4),
-                Text(
-                  'Register a new student with auto-generated registration details.',
-                  style: AppTypography.bodySmall,
-                ),
+                Text('Fields marked * are required.', style: AppTypography.bodySmall),
                 const SizedBox(height: 18),
-
-                CustomTextField(labelText: 'First Name', hintText: 'e.g. Alex', controller: fNameController),
+                CustomTextField(labelText: 'First Name *', hintText: 'First name', controller: fNameController),
                 const SizedBox(height: 12),
-                CustomTextField(labelText: 'Middle Name (Optional)', hintText: 'e.g. Chukwuma', controller: mNameController),
+                CustomTextField(labelText: 'Middle Name', hintText: 'Optional', controller: mNameController),
                 const SizedBox(height: 12),
-                CustomTextField(labelText: 'Last Name / Surname', hintText: 'e.g. Johnson', controller: lNameController),
+                CustomTextField(labelText: 'Surname *', hintText: 'Surname', controller: lNameController),
                 const SizedBox(height: 12),
-                CustomTextField(labelText: 'Registration Number', hintText: 'EDS/2026/XXXX', controller: regController),
+                CustomTextField(labelText: 'Registration Number *', hintText: 'e.g. STU/2026/001', controller: regController),
                 const SizedBox(height: 12),
-
-                // Gender selector
-                Text('Gender', style: AppTypography.labelMedium),
+                Text('Class *', style: AppTypography.labelMedium),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue: classId,
+                  isExpanded: true,
+                  hint: Text(classOptions.isEmpty ? 'No classes available (connect to load them)' : 'Select class'),
+                  items: classOptions
+                      .map((c) => DropdownMenuItem<String>(value: c['id'] as String?, child: Text(c['label'] as String)))
+                      .toList(),
+                  onChanged: (v) => setModalState(() => classId = v),
+                ),
+                const SizedBox(height: 12),
+                Text('Gender *', style: AppTypography.labelMedium),
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     ChoiceChip(
                       label: const Text('Male'),
-                      selected: gender == 'Male',
-                      onSelected: (val) => setModalState(() => gender = 'Male'),
+                      selected: gender == 'male',
+                      onSelected: (_) => setModalState(() => gender = 'male'),
                     ),
                     const SizedBox(width: 12),
                     ChoiceChip(
                       label: const Text('Female'),
-                      selected: gender == 'Female',
-                      onSelected: (val) => setModalState(() => gender = 'Female'),
+                      selected: gender == 'female',
+                      onSelected: (_) => setModalState(() => gender = 'female'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-
-                // Next of Kin
-                CustomTextField(labelText: 'Parent/Guardian Full Name', hintText: 'e.g. Mrs. Mary Johnson', controller: nokNameController),
                 const SizedBox(height: 12),
-                CustomTextField(labelText: 'Guardian Phone Number', hintText: 'e.g. 08012345678', controller: nokPhoneController),
+                CustomTextField(labelText: 'Student Email', hintText: 'Needed when the student portal is on', controller: emailController, keyboardType: TextInputType.emailAddress),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Address *', hintText: 'Home address', controller: addressController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'City *', hintText: 'City', controller: cityController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'State *', hintText: 'State', controller: stateController),
+                const SizedBox(height: 18),
+                Text('Parent / Guardian', style: AppTypography.titleMedium),
+                const SizedBox(height: 10),
+                CustomTextField(labelText: 'Full Name *', hintText: 'Guardian name', controller: nokNameController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Relationship *', hintText: 'e.g. Father, Mother', controller: nokRelationController),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Phone Number', hintText: 'e.g. 08012345678', controller: nokPhoneController, keyboardType: TextInputType.phone),
+                const SizedBox(height: 12),
+                CustomTextField(labelText: 'Email', hintText: 'Needed when the student portal is on', controller: nokEmailController, keyboardType: TextInputType.emailAddress),
                 const SizedBox(height: 24),
-
                 PrimaryButton(
                   text: 'Enroll Student',
                   isLoading: isSaving,
                   onPressed: () async {
-                    if (fNameController.text.trim().isEmpty || lNameController.text.trim().isEmpty) {
+                    final required = [fNameController, lNameController, regController, addressController, cityController, stateController, nokNameController, nokRelationController];
+                    if (required.any((c) => c.text.trim().isEmpty) || classId == null) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('Please fill First and Last Name.')),
+                        const SnackBar(content: Text('Please fill every field marked * and choose a class.')),
                       );
                       return;
                     }
-
+                    final chosen = classOptions.firstWhere((c) => c['id'] == classId);
                     setModalState(() => isSaving = true);
-                    final payload = {
+                    String? optional(TextEditingController c) => c.text.trim().isEmpty ? null : c.text.trim();
+                    final payload = <String, dynamic>{
                       'firstName': fNameController.text.trim(),
                       'middleName': mNameController.text.trim(),
                       'lastName': lNameController.text.trim(),
                       'registrationNumber': regController.text.trim(),
                       'gender': gender,
-                      'nextOfKinFullName': nokNameController.text.trim(),
+                      'class': classId,
+                      'section': chosen['sectionId'],
+                      'address': addressController.text.trim(),
+                      'city': cityController.text.trim(),
+                      'state': stateController.text.trim(),
+                      'email': optional(emailController),
+                      'nextOfKinFullname': nokNameController.text.trim(),
+                      'nextOfKinRelationship': nokRelationController.text.trim(),
                       'nextOfKinPhoneNumber': nokPhoneController.text.trim(),
-                    };
+                      'nextOfKinEmail': optional(nokEmailController),
+                    }..removeWhere((_, v) => v == null);
 
                     try {
-                      await ApiClient.instance.post('student/create', body: payload);
+                      final result = await ApiClient.instance.send('POST', 'student/create',
+                          body: payload, feature: 'students', label: 'Enrol ${payload['firstName']} ${payload['lastName']}');
                       if (ctx.mounted) Navigator.pop(ctx);
-                      _fetchStudents();
+                      if (!ApiClient.isQueued(result)) _fetchStudents();
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Student registered successfully!'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
+                        await showCreateResult(context, result,
+                            name: '${payload['firstName']} ${payload['lastName']}',
+                            login: payload['registrationNumber'] as String,
+                            successText: 'Student registered successfully!');
                       }
                     } catch (e) {
                       setModalState(() => isSaving = false);
                       if (ctx.mounted) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          SnackBar(content: Text('Enrollment: $e')),
-                        );
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Could not enrol: $e')));
                       }
                     }
                   },

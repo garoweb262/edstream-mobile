@@ -230,8 +230,14 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
                       };
 
                       try {
-                        await ApiClient.instance.post(endpoint, body: payload);
-                      } catch (_) {}
+                        await ApiClient.instance.send('POST', endpoint, feature: 'complaints', label: 'Complaint: ${payload['subject']}', body: payload);
+                      } catch (e) {
+                        setModalState(() => isSubmitting = false);
+                        if (mounted) {
+                          ApiClient.messengerKey.currentState?.showSnackBar(SnackBar(content: Text('Could not send: $e')));
+                        }
+                        return;
+                      }
 
                       // Local optimistic append
                       setState(() {

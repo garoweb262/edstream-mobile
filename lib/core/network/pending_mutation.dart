@@ -1,5 +1,7 @@
 /// Represents a single queued write mutation made while offline.
-/// Replayed verbatim against https://api.edstream.ng/api/v1 once connectivity returns.
+/// Replayed verbatim against the API once connectivity returns. When the
+/// server rejects it, [errorMessage] is set and it waits for the user to
+/// retry or discard it.
 class PendingMutation {
   const PendingMutation({
     required this.localId,
@@ -11,6 +13,7 @@ class PendingMutation {
     this.payload,
     this.entityId,
     required this.createdAt,
+    this.errorMessage,
   });
 
   final String localId;
@@ -38,6 +41,24 @@ class PendingMutation {
 
   final DateTime createdAt;
 
+  /// Set when the server rejected this change.
+  final String? errorMessage;
+
+  bool get isFailed => errorMessage != null;
+
+  PendingMutation copyWith({String? errorMessage, bool clearError = false}) => PendingMutation(
+        localId: localId,
+        feature: feature,
+        operation: operation,
+        method: method,
+        path: path,
+        payload: payload,
+        entityId: entityId,
+        displaySnapshot: displaySnapshot,
+        createdAt: createdAt,
+        errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      );
+
   Map<String, dynamic> toMap() => {
     'localId': localId,
     'feature': feature,
@@ -48,6 +69,7 @@ class PendingMutation {
     'entityId': entityId,
     'displaySnapshot': displaySnapshot,
     'createdAt': createdAt.toIso8601String(),
+    'errorMessage': errorMessage,
   };
 
   factory PendingMutation.fromMap(Map<String, dynamic> map) {
@@ -61,6 +83,7 @@ class PendingMutation {
       entityId: map['entityId'] as String?,
       displaySnapshot: Map<String, dynamic>.from(map['displaySnapshot'] as Map? ?? {}),
       createdAt: DateTime.parse(map['createdAt'] as String),
+      errorMessage: map['errorMessage'] as String?,
     );
   }
 }

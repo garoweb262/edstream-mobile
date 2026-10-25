@@ -30,8 +30,37 @@ class OfflineMutationQueue extends ChangeNotifier {
   }
 
   String generateLocalId(String feature) {
-    return 'mut-$feature-${DateTime.now().millisecondsSinceEpoch}';
+    return 'mut-$feature-${DateTime.now().microsecondsSinceEpoch}';
   }
+
+  /// Marks a change the server rejected; it stays listed until retried or discarded.
+  Future<void> markFailed(String localId, String message) async {
+    await init();
+    final i = _mutations.indexWhere((m) => m.localId == localId);
+    if (i == -1) return;
+    _mutations[i] = _mutations[i].copyWith(errorMessage: message);
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Puts every rejected change back in line for the next sync.
+  Future<void> retryFailed() async {
+    await init();
+    for (var i = 0; i < _mutations.length; i++) {
+      if (_mutations[i].isFailed) _mutations[i] = _mutations[i].copyWith(clearError: true);
+    }
+    await _persist();
+    notifyListeners();
+  }
+
+  Future<void> discardFailed() async {
+    await init();
+    _mutations.removeWhere((m) => m.isFailed);
+    await _persist();
+    notifyListeners();
+  }
+
+  int failedCount() => _mutations.where((m) => m.isFailed).length;
 
   Future<void> enqueue(PendingMutation mutation) async {
     await init();
@@ -54,12 +83,9 @@ class OfflineMutationQueue extends ChangeNotifier {
     return _mutations.where((m) => m.feature == feature).toList();
   }
 
-  int count({String? feature}) {
-    if (feature == null) {
-      return _mutations.length;
-    }
-    return _mutations.where((m) => m.feature == feature).length;
-  }
+  /// Changes still waiting to be sent (rejected ones are not counted).
+  int count({String? feature}) =>
+      _mutations.where((m) => !m.isFailed && (feature == null || m.feature == feature)).length;
 
   Future<void> clear() async {
     _mutations.clear();

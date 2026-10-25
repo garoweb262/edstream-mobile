@@ -88,69 +88,8 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
   }
 
   void _loadDefaultMockExpenses() {
-    _expenses = [
-      {
-        '_id': 'exp-101',
-        'reason': 'Procurement of Laboratory Chemical Reagents for WAEC Practical Exams',
-        'amount': 380000,
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'Senior Secondary',
-        'requestedBy': 'Grace Adeyemi (HOD Science)',
-        'status': 'pending',
-        'createdAt': '2026-10-08T09:30:00Z',
-      },
-      {
-        '_id': 'exp-102',
-        'reason': 'Diesel Generator Fuel Supply for Campus Power (500 Liters)',
-        'amount': 650000,
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'General Administration',
-        'requestedBy': 'Mallam Garba (Facility Mgr)',
-        'status': 'pending',
-        'createdAt': '2026-10-09T14:15:00Z',
-      },
-      {
-        '_id': 'exp-103',
-        'reason': 'Inter-House Sports Trophy & Certificates Printing',
-        'amount': 210000,
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'All Sections',
-        'requestedBy': 'Coach Samuel',
-        'status': 'approved',
-        'approvedBy': 'Dr. Idi Sule (Principal)',
-        'note': 'Approved for sports committee budget allocation.',
-        'createdAt': '2026-10-05T11:00:00Z',
-      },
-      {
-        '_id': 'exp-104',
-        'reason': 'Computer Lab Network Router & Cat6 Cabling Replacement',
-        'amount': 185000,
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'ICT Department',
-        'requestedBy': 'Chidi Okonkwo',
-        'status': 'approved',
-        'approvedBy': 'Alhaji Ibrahim Danjuma (Director)',
-        'note': 'Approved for immediate ICT maintenance.',
-        'createdAt': '2026-10-02T16:40:00Z',
-      },
-      {
-        '_id': 'exp-105',
-        'reason': 'Executive Luxury Leather Armchairs for Staff Common Room',
-        'amount': 890000,
-        'session': '2024/2025',
-        'term': '3rd Term',
-        'section': 'Staff Welfare',
-        'requestedBy': 'Welfare Committee',
-        'status': 'rejected',
-        'approvedBy': 'Fatima Garba (Finance Officer)',
-        'note': 'Exceeds non-essential procurement ceiling for Term 3.',
-        'createdAt': '2026-09-28T10:20:00Z',
-      },
-    ];
+    // No made-up records: an empty list shows the screen's empty state.
+    _expenses = [];
   }
 
   List<Map<String, dynamic>> _getFilteredList(String status) {
@@ -261,10 +200,17 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
                       try {
                         final expenseId = item['_id']?.toString() ?? '';
                         final endpoint = isApprove ? 'expenses/approve/$expenseId' : 'expenses/reject/$expenseId';
-                        await ApiClient.instance.patch(endpoint, body: {
+                        await ApiClient.instance.send('PATCH', endpoint,
+                            feature: 'expenses', label: isApprove ? 'Approve expense' : 'Reject expense', body: {
                           'note': noteController.text.trim(),
                         });
-                      } catch (_) {}
+                      } catch (e) {
+                        setModalState(() => isSubmitting = false);
+                        if (modalCtx.mounted) {
+                          ScaffoldMessenger.of(modalCtx).showSnackBar(SnackBar(content: Text('Could not update: $e')));
+                        }
+                        return;
+                      }
 
                       setState(() {
                         item['status'] = isApprove ? 'approved' : 'rejected';
@@ -294,7 +240,24 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
     );
   }
 
-  void _showNewExpenseModal() {
+  void _showNewExpenseModal() async {
+    // Expenses are filed against the current session/term and a section.
+    Map? current;
+    List<Map> sections = [];
+    try {
+      final res = await ApiClient.instance.get('staff/last-term-session');
+      if (res is Map) current = res;
+    } catch (_) {}
+    try {
+      final res = await ApiClient.instance.get('section', queryParams: {'limit': 100});
+      final list = res is Map ? (res['sections'] ?? res['data']) : null;
+      if (list is List) sections = list.whereType<Map>().toList();
+    } catch (_) {}
+    if (!mounted) return;
+    final sessionId = current?['lastSession']?['_id']?.toString();
+    final termId = current?['lastTerm']?['_id']?.toString();
+    final periodLabel = '${current?['lastSession']?['session'] ?? ''} · ${current?['lastTerm']?['term'] ?? ''} term';
+    String? sectionId = sections.isNotEmpty ? sections.first['_id']?.toString() : null;
     final reasonController = TextEditingController();
     final amountController = TextEditingController();
     bool isSubmitting = false;
@@ -363,6 +326,18 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  Text('Section', style: AppTypography.labelMedium),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: sectionId,
+                    hint: const Text('Choose section'),
+                    items: sections
+                        .map((sec) => DropdownMenuItem<String>(value: sec['_id']?.toString(), child: Text(sec['name']?.toString() ?? 'Section')))
+                        .toList(),
+                    onChanged: (v) => setModalState(() => sectionId = v),
+                  ),
+                  Text('For $periodLabel', style: AppTypography.labelSmall),
                   const SizedBox(height: 18),
                   PrimaryButton(
                     text: 'Submit Request',
@@ -377,24 +352,37 @@ class _ExpensesApprovalScreenState extends State<ExpensesApprovalScreen> with Si
                         return;
                       }
 
+                      if (sessionId == null || termId == null || sectionId == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('No current session/term or section found. Connect once to load them.')),
+                        );
+                        return;
+                      }
                       setModalState(() => isSubmitting = true);
                       try {
-                        await ApiClient.instance.post('expenses', body: {
+                        await ApiClient.instance.send('POST', 'expenses', feature: 'expenses', label: 'Expense: $reason', body: {
                           'reason': reason,
                           'amountSpent': amt,
-                          'session': '2024/2025',
-                          'term': '3rd Term',
+                          'session': sessionId,
+                          'term': termId,
+                          'section': sectionId,
                         });
-                      } catch (_) {}
+                      } catch (e) {
+                        setModalState(() => isSubmitting = false);
+                        if (modalCtx.mounted) {
+                          ScaffoldMessenger.of(modalCtx).showSnackBar(SnackBar(content: Text('Could not submit: $e')));
+                        }
+                        return;
+                      }
 
                       setState(() {
                         _expenses.insert(0, {
                           '_id': 'exp-${DateTime.now().millisecondsSinceEpoch}',
                           'reason': reason,
                           'amount': amt,
-                          'session': '2024/2025',
-                          'term': '3rd Term',
-                          'section': 'General',
+                          'session': current?['lastSession']?['session'] ?? '',
+                          'term': current?['lastTerm']?['term'] ?? '',
+                          'section': sections.where((x) => x['_id']?.toString() == sectionId).map((x) => x['name']).firstOrNull ?? '',
                           'requestedBy': 'You',
                           'status': 'pending',
                           'createdAt': DateTime.now().toIso8601String(),
